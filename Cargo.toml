@@ -8,3 +8,4 @@ edition = "2018"
 
 [dependencies]
 enum_dispatch = "0.3.4"
+derive_more = "0.99.11"
