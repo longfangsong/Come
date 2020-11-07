@@ -3,17 +3,11 @@ name: Rust
 on:
   push:
     branches: [ main ]
-  pull_request:
-    branches: [ main ]
-
 env:
   CARGO_TERM_COLOR: always
-
 jobs:
   build:
-
     runs-on: ubuntu-latest
-
     steps:
     - uses: actions/checkout@v2
     - name: Build
@@ -21,4 +15,11 @@ jobs:
     - name: Run tests
       run: cargo test --verbose
     - name: Build doc
-      run: cargo doc --release
+      run: cargo doc --release --document-private-items
+    - name: Deploy docs
+      uses: JamesIves/github-pages-deploy-action@3.7.1
+      with:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        BRANCH: gh-pages
+        FOLDER: target/doc
+        CLEAN: true
