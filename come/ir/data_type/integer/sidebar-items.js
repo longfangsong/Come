@@ -1,0 +1,1 @@
+initSidebarItems({"struct":[["Integer","An arbitrary bit width Integer"]]});

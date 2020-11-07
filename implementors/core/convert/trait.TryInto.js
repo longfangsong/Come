@@ -1,0 +1,3 @@
+(function() {var implementors = {};
+implementors["come"] = [{"text":"impl TryInto&lt;Address&gt; for DataType","synthetic":false,"types":[]},{"text":"impl TryInto&lt;Integer&gt; for DataType","synthetic":false,"types":[]},{"text":"impl TryInto&lt;Array&gt; for DataType","synthetic":false,"types":[]},{"text":"impl TryInto&lt;Struct&gt; for DataType","synthetic":false,"types":[]}];
+if (window.register_implementors) {window.register_implementors(implementors);} else {window.pending_implementors = implementors;}})()

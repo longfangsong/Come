@@ -1,0 +1,1 @@
+initSidebarItems({"enum":[["DataType","A type of data"],["DataTypeRef","Reference to a `DataType`"]],"mod":[["address",""],["array",""],["integer",""],["struct_type",""]],"struct":[["DataTypeTable",""]],"trait":[["DataTypeExt",""]]});
