@@ -4,11 +4,13 @@ mod array;
 mod integer;
 mod struct_type;
 
+use crate::util::parsing;
 use address::Address;
 use array::Array;
 use derive_more::From;
 use enum_dispatch::enum_dispatch;
 use integer::Integer;
+use nom::{branch::alt, combinator::map, IResult};
 use std::{
     collections::HashMap,
     fmt::{self, Display, Formatter},
@@ -33,12 +35,21 @@ pub trait DataTypeExt {
 }
 
 /// Reference to a `DataType`
-#[derive(Clone, From)]
+#[derive(Clone, From, Debug, PartialEq, Eq)]
 pub enum DataTypeRef {
     Address(Address),
     Integer(Integer),
     Array(Array),
     Struct(String),
+}
+
+pub fn parse_ref(code: &str) -> IResult<&str, DataTypeRef> {
+    alt((
+        map(address::parse, DataTypeRef::Address),
+        map(array::parse, DataTypeRef::Array),
+        map(integer::parse, DataTypeRef::Integer),
+        map(parsing::ident, DataTypeRef::Struct),
+    ))(code)
 }
 
 impl Display for DataType {
@@ -106,6 +117,28 @@ impl DataTypeTable {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_parse() {
+        let result = parse_ref("S0").unwrap().1;
+        assert_eq!(result, DataTypeRef::Struct("S0".to_string()));
+        let result = parse_ref("address").unwrap().1;
+        assert_eq!(result, DataTypeRef::Address(Address));
+        let result = parse_ref("u32").unwrap().1;
+        let u32_type = Integer {
+            signed: false,
+            bit_width: 32,
+        };
+        assert_eq!(result, DataTypeRef::Integer(u32_type.clone()));
+        let result = parse_ref("u32[10]").unwrap().1;
+        assert_eq!(
+            result,
+            DataTypeRef::Array(Array {
+                children_type: Box::new(DataTypeRef::Integer(u32_type)),
+                length: 10
+            })
+        );
+    }
 
     #[test]
     fn test_size() {

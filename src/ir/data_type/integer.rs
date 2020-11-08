@@ -1,8 +1,13 @@
+//! An arbitrary bit width Integer
 use crate::ir::data_type::{DataTypeExt, DataTypeTable};
-use std::fmt;
+use nom::{
+    branch::alt, bytes::complete::tag, character::complete::digit1, combinator::map,
+    sequence::pair, IResult,
+};
+use std::{fmt, str::FromStr};
 
 /// An arbitrary bit width Integer
-#[derive(Clone)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Integer {
     /// whether the integer is signed
     pub signed: bool,
@@ -25,4 +30,17 @@ impl DataTypeExt for Integer {
     fn size(&self, _data_type_table: &DataTypeTable) -> usize {
         self.bit_width
     }
+}
+
+pub fn parse(code: &str) -> IResult<&str, Integer> {
+    alt((
+        map(pair(tag("i"), digit1), |(_, width_str)| Integer {
+            signed: true,
+            bit_width: usize::from_str(width_str).unwrap(),
+        }),
+        map(pair(tag("u"), digit1), |(_, width_str)| Integer {
+            signed: false,
+            bit_width: usize::from_str(width_str).unwrap(),
+        }),
+    ))(code)
 }
