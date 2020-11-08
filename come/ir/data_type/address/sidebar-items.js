@@ -1,1 +1,1 @@
-initSidebarItems({"struct":[["Address","An address in memory"]]});
+initSidebarItems({"fn":[["parse",""]],"struct":[["Address","An address in memory"]]});

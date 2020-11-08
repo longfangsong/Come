@@ -1,1 +1,1 @@
-initSidebarItems({"struct":[["Integer","An arbitrary bit width Integer"]]});
+initSidebarItems({"fn":[["parse",""]],"struct":[["Integer","An arbitrary bit width Integer"]]});

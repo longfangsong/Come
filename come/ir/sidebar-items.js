@@ -1,1 +1,1 @@
-initSidebarItems({"mod":[["data_type","This module describe the data types exists in Come IR"]]});
+initSidebarItems({"mod":[["data_type","This module describe the data types exists in Come IR"],["util","Utilities which used by IR"]]});

@@ -1,1 +1,1 @@
-initSidebarItems({"struct":[["Array","An array of other type"]]});
+initSidebarItems({"fn":[["higher_than_array",""],["parse",""]],"struct":[["Array","An array of other type"]]});
