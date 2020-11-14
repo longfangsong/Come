@@ -2,54 +2,31 @@
 mod address;
 mod array;
 mod integer;
+mod space;
 mod struct_type;
 
-use crate::util::parsing;
+use crate::ir::data_type::space::Space;
 use address::Address;
 use array::Array;
-use derive_more::From;
-use enum_dispatch::enum_dispatch;
+use derive_more::{From, TryInto};
 use integer::Integer;
+
+use crate::ir::parsing::{lift, Error, ParsingContext};
 use nom::{branch::alt, combinator::map, IResult};
 use std::{
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     fmt::{self, Display, Formatter},
 };
 use struct_type::Struct;
 
 /// A type of data
-#[enum_dispatch]
-#[derive(Clone)]
+#[derive(Clone, From, TryInto, Debug, Hash, Ord, PartialOrd, PartialEq, Eq)]
 pub enum DataType {
     Address(Address),
     Integer(Integer),
     Array(Array),
     Struct(Struct),
-}
-
-// todo: in the future we may want to support 64-bit systems
-// then `Address` type might be a certain size of <SystemWordLength>
-#[enum_dispatch(DataType)]
-pub trait DataTypeExt {
-    fn size(&self, data_type_table: &DataTypeTable) -> usize;
-}
-
-/// Reference to a `DataType`
-#[derive(Clone, From, Debug, PartialEq, Eq)]
-pub enum DataTypeRef {
-    Address(Address),
-    Integer(Integer),
-    Array(Array),
-    Struct(String),
-}
-
-pub fn parse_ref(code: &str) -> IResult<&str, DataTypeRef> {
-    alt((
-        map(address::parse, DataTypeRef::Address),
-        map(array::parse, DataTypeRef::Array),
-        map(integer::parse, DataTypeRef::Integer),
-        map(parsing::ident, DataTypeRef::Struct),
-    ))(code)
+    Space(Space),
 }
 
 impl Display for DataType {
@@ -59,34 +36,14 @@ impl Display for DataType {
             DataType::Array(x) => x.fmt(f),
             DataType::Address(x) => x.fmt(f),
             DataType::Struct(x) => x.fmt(f),
+            DataType::Space(x) => x.fmt(f),
         }
     }
 }
 
-impl Display for DataTypeRef {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        match self {
-            DataTypeRef::Integer(x) => x.fmt(f),
-            DataTypeRef::Array(x) => x.fmt(f),
-            DataTypeRef::Address(x) => x.fmt(f),
-            DataTypeRef::Struct(x) => x.fmt(f),
-        }
-    }
-}
-
-impl Into<DataTypeRef> for DataType {
-    fn into(self) -> DataTypeRef {
-        match self {
-            DataType::Address(x) => DataTypeRef::Address(x),
-            DataType::Integer(x) => DataTypeRef::Integer(x),
-            DataType::Array(x) => DataTypeRef::Array(x),
-            DataType::Struct(x) => DataTypeRef::Struct(x.name),
-        }
-    }
-}
-
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct DataTypeTable {
-    structs: HashMap<String, Struct>,
+    structs: HashMap<String, DataType>,
 }
 
 impl DataTypeTable {
@@ -100,74 +57,32 @@ impl DataTypeTable {
 impl DataTypeTable {
     fn add_type(&mut self, data_type: DataType) {
         if let DataType::Struct(x) = data_type {
-            self.structs.insert(x.name.clone(), x);
+            let name = x.name.clone();
+            let result = DataType::Struct(x);
+            self.structs.insert(name, result.clone());
         }
     }
 
-    fn get_type(&self, data_type_ref: &DataTypeRef) -> Option<DataType> {
-        match data_type_ref {
-            DataTypeRef::Address(x) => Some(DataType::Address(*x)),
-            DataTypeRef::Integer(x) => Some(DataType::Integer(x.clone())),
-            DataTypeRef::Array(x) => Some(DataType::Array(x.clone())),
-            DataTypeRef::Struct(x) => self.structs.get(x).map(|it| DataType::Struct(it.clone())),
-        }
+    fn get_type(&self, name: &str) -> Option<DataType> {
+        self.structs.get(name).cloned()
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_parse() {
-        let result = parse_ref("S0").unwrap().1;
-        assert_eq!(result, DataTypeRef::Struct("S0".to_string()));
-        let result = parse_ref("address").unwrap().1;
-        assert_eq!(result, DataTypeRef::Address(Address));
-        let result = parse_ref("u32").unwrap().1;
-        let u32_type = Integer {
-            signed: false,
-            bit_width: 32,
-        };
-        assert_eq!(result, DataTypeRef::Integer(u32_type.clone()));
-        let result = parse_ref("u32[10]").unwrap().1;
-        assert_eq!(
-            result,
-            DataTypeRef::Array(Array {
-                children_type: Box::new(DataTypeRef::Integer(u32_type)),
-                length: 10
-            })
-        );
-    }
-
-    #[test]
-    fn test_size() {
-        let i32_type = Integer {
-            signed: true,
-            bit_width: 32,
-        };
-        let u64_type = Integer {
-            signed: false,
-            bit_width: 64,
-        };
-        let address_type = Address;
-        let array_type = Array {
-            children_type: Box::new(i32_type.clone().into()),
-            length: 5,
-        };
-        let struct_type = Struct {
-            name: "S".to_string(),
-            children_type: vec![
-                i32_type.clone().into(),
-                u64_type.clone().into(),
-                address_type.clone().into(),
-                array_type.clone().into(),
-            ],
-        };
-
-        let mut table = DataTypeTable::new();
-        table.add_type(struct_type.clone().into());
-        let size = struct_type.size(&table);
-        assert_eq!(size, 32 + 64 + 32 + 5 * 32)
-    }
+pub fn parse(context: ParsingContext) -> IResult<ParsingContext, DataType, Error> {
+    alt((
+        map(lift(integer::parse), DataType::Integer),
+        map(lift(space::parse), DataType::Space),
+        map(lift(address::parse), DataType::Address),
+        map(struct_type::parse, DataType::Struct),
+        map(array::parse, DataType::Array),
+    ))(context)
 }
+
+// #[cfg(test)]
+// mod tests {
+//     #[test]
+//     fn test_parse() {
+//         let code = "i32";
+//         let context =
+//     }
+// }

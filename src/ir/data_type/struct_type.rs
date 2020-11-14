@@ -1,28 +1,37 @@
 //! A user defined struct
 use crate::{
     ir::{
-        data_type::{parse_ref, DataTypeExt, DataTypeRef, DataTypeTable},
+        data_type::{DataType, DataTypeTable},
         util::parsing::local,
     },
     util::parsing::in_multispace,
 };
+
+use crate::{
+    ir::{
+        data_type,
+        parsing::{lift, Error, ParsingContext},
+    },
+    util::parsing,
+};
 use nom::{
+    branch::alt,
     bytes::complete::tag,
-    character::complete::space0,
+    character::streaming::space0,
     combinator::map,
     multi::many1,
     sequence::{delimited, pair, tuple},
     IResult,
 };
-use std::fmt;
+use std::{convert::TryInto, fmt, rc::Rc};
 
 /// A user defined struct
-#[derive(Clone)]
+#[derive(Clone, Debug, Hash, Ord, PartialOrd, PartialEq, Eq)]
 pub struct Struct {
     /// name of the struct
     pub name: String,
     /// children types
-    pub children_type: Vec<DataTypeRef>,
+    pub children_type: Vec<DataType>,
 }
 
 impl fmt::Display for Struct {
@@ -37,54 +46,50 @@ impl fmt::Display for Struct {
     }
 }
 
-impl DataTypeExt for Struct {
-    fn size(&self, data_type_table: &DataTypeTable) -> usize {
-        self.children_type
-            .iter()
-            .map(|it| data_type_table.get_type(it).unwrap())
-            .map(|it| it.size(data_type_table))
-            .sum()
-    }
-}
-
-pub fn parse(code: &str) -> IResult<&str, Struct> {
+fn parse_definition(context: ParsingContext) -> IResult<ParsingContext, Struct, Error> {
     map(
-        tuple((
-            local,
-            space0,
-            tag("="),
-            space0,
-            tag("type"),
-            space0,
+        pair(
+            lift(tuple((
+                local,
+                space0,
+                tag("="),
+                space0,
+                tag("type"),
+                space0,
+            ))),
             delimited(
-                in_multispace(tag("{")),
-                many1(in_multispace(map(pair(parse_ref, tag(",")), |x| x.0))),
-                in_multispace(tag("}")),
+                lift(in_multispace(tag("{"))),
+                many1(map(pair(data_type::parse, lift(tag(","))), |x| x.0)),
+                lift(in_multispace(tag("{"))),
             ),
-        )),
-        |(name, _, _, _, _, _, children_type)| Struct {
+        ),
+        |((name, _, _, _, _, _), children_type)| Struct {
             name,
             children_type,
         },
-    )(code)
+    )(context)
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_parse() {
-        let result = parse(
-            "%S = type {\
-        u64,\
-        u32,\
-        Address,\
-        S0,\
-        }",
-        )
-            .unwrap()
-            .1;
-        assert_eq!(result.children_type.len(), 4);
+pub fn parse(context: ParsingContext) -> IResult<ParsingContext, Struct, Error> {
+    if let Ok((mut rest_context, result)) = parse_definition(context.clone()) {
+        rest_context.data_type_table.add_type(result.clone().into());
+        Ok((rest_context, result))
+    } else {
+        let (code, table) = (context.code, context.data_type_table);
+        let (rest_code, name) = parsing::ident(code).map_err(|it| Error::from(it).into())?;
+        let result = table.get_type(&name).ok_or_else(|| {
+            Error::ParseContextError(ParsingContext {
+                code: rest_code,
+                data_type_table: table.clone(),
+            })
+            .into()
+        })?;
+        Ok((
+            ParsingContext {
+                code,
+                data_type_table: table,
+            },
+            result.try_into().unwrap(),
+        ))
     }
 }

@@ -1,5 +1,5 @@
 //! An arbitrary bit width Integer
-use crate::ir::data_type::{DataTypeExt, DataTypeTable};
+
 use nom::{
     branch::alt, bytes::complete::tag, character::complete::digit1, combinator::map,
     sequence::pair, IResult,
@@ -7,7 +7,7 @@ use nom::{
 use std::{fmt, str::FromStr};
 
 /// An arbitrary bit width Integer
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, Hash, Ord, PartialOrd, PartialEq, Eq)]
 pub struct Integer {
     /// whether the integer is signed
     pub signed: bool,
@@ -23,12 +23,6 @@ impl fmt::Display for Integer {
             if self.signed { "i" } else { "u" },
             self.bit_width
         )
-    }
-}
-
-impl DataTypeExt for Integer {
-    fn size(&self, _data_type_table: &DataTypeTable) -> usize {
-        self.bit_width
     }
 }
 

@@ -1,22 +1,23 @@
 //! An array of other type
 use crate::{
-    ir::data_type::{address, integer, DataTypeExt, DataTypeRef, DataTypeTable},
+    ir::data_type::{address, integer, DataType, DataTypeTable},
     util::{parsing, parsing::integer},
 };
-use nom::{
-    branch::alt,
-    bytes::complete::tag,
-    combinator::map,
-    sequence::{delimited, pair},
-    IResult,
-};
-use std::fmt;
+
+use std::{fmt, rc::Rc};
+use crate::ir::parsing::{ParsingContext, Error, lift};
+use nom::IResult;
+use nom::branch::alt;
+use nom::combinator::map;
+use crate::ir::data_type::{space, struct_type};
+use nom::sequence::{pair, delimited};
+use nom::bytes::complete::tag;
 
 /// An array of other type
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, Hash, Ord, PartialOrd, PartialEq, Eq)]
 pub struct Array {
     /// The content type
-    pub children_type: Box<DataTypeRef>,
+    pub children_type: Box<DataType>,
     /// The length of the array
     pub length: usize,
 }
@@ -27,30 +28,21 @@ impl fmt::Display for Array {
     }
 }
 
-impl DataTypeExt for Array {
-    fn size(&self, data_type_table: &DataTypeTable) -> usize {
-        self.length
-            * data_type_table
-                .get_type(&self.children_type)
-                .unwrap()
-                .size(data_type_table)
-    }
-}
-
-pub fn higher_than_array(code: &str) -> IResult<&str, DataTypeRef> {
+fn higher_than_array(context: ParsingContext) -> IResult<ParsingContext, DataType, Error> {
     alt((
-        map(address::parse, DataTypeRef::Address),
-        map(integer::parse, DataTypeRef::Integer),
-        map(parsing::ident, DataTypeRef::Struct),
-    ))(code)
+        map(lift(integer::parse), DataType::Integer),
+        map(lift(space::parse), DataType::Space),
+        map(lift(address::parse), DataType::Address),
+        map(struct_type::parse, DataType::Struct),
+    ))(context)
 }
 
-pub fn parse(code: &str) -> IResult<&str, Array> {
+pub fn parse(context: ParsingContext) -> IResult<ParsingContext, Array, Error> {
     map(
-        pair(higher_than_array, delimited(tag("["), integer, tag("]"))),
+        pair(higher_than_array, lift(delimited(tag("["), integer, tag("]")))),
         |(children_type, length)| Array {
             children_type: Box::new(children_type),
             length: length as usize,
         },
-    )(code)
+    )(context)
 }
