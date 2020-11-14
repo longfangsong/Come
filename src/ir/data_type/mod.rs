@@ -73,16 +73,41 @@ pub fn parse(context: ParsingContext) -> IResult<ParsingContext, DataType, Error
         map(lift(integer::parse), DataType::Integer),
         map(lift(space::parse), DataType::Space),
         map(lift(address::parse), DataType::Address),
-        map(struct_type::parse, DataType::Struct),
         map(array::parse, DataType::Array),
+        map(struct_type::parse, DataType::Struct),
     ))(context)
 }
 
-// #[cfg(test)]
-// mod tests {
-//     #[test]
-//     fn test_parse() {
-//         let code = "i32";
-//         let context =
-//     }
-// }
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::ir::data_type::DataTypeTable;
+    use crate::ir::parsing::ParsingContext;
+
+    #[test]
+    fn test_parse() {
+        let code = "i32";
+        let table = DataTypeTable { structs: Default::default() };
+        let context = ParsingContext { code, data_type_table: table };
+        let (rest_context, result) = parse(context).unwrap();
+        assert_eq!(result, DataType::Integer(Integer { signed: true, bit_width: 32 }));
+
+        let i32_type = result;
+        let code = "%S = type { i32, i32, }";
+        let table = DataTypeTable { structs: Default::default() };
+        let context = ParsingContext { code, data_type_table: table };
+        let (rest_context, result) = parse(context).unwrap();
+        assert_eq!(result, DataType::Struct(Struct { name: "S".to_string(), children_type: vec![i32_type.clone(), i32_type] }));
+
+        let old_result = result;
+        let code = "S";
+        let context = ParsingContext { code, data_type_table: rest_context.data_type_table };
+        let (rest_context, result) = parse(context).unwrap();
+        assert_eq!(result, old_result);
+
+        let code = "S[32]";
+        let context = ParsingContext { code, data_type_table: rest_context.data_type_table };
+        let (rest_context, result) = parse(context).unwrap();
+        assert_eq!(result, DataType::Array(Array { children_type: Box::new(old_result), length: 32 }));
+    }
+}

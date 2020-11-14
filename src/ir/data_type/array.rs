@@ -46,3 +46,27 @@ pub fn parse(context: ParsingContext) -> IResult<ParsingContext, Array, Error> {
         },
     )(context)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::ir::parsing::ParsingContext;
+    use crate::ir::data_type::DataTypeTable;
+    use crate::ir::data_type::integer::Integer;
+    use crate::ir::data_type::struct_type::Struct;
+
+    #[test]
+    fn test_parse() {
+        let i32_type = Integer { signed: true, bit_width: 32 };
+        let code = "i32[32]";
+        let mut context = ParsingContext { code, data_type_table: DataTypeTable { structs: Default::default() } };
+        let (rest_context, result) = parse(context.clone()).unwrap();
+        assert_eq!(result, Array { children_type: Box::new(DataType::Integer(i32_type.clone())), length: 32 });
+
+        let struct_type = Struct { name: "S".to_string(), children_type: vec![i32_type.clone().into(), i32_type.clone().into()] };
+        context.code = "S[32]";
+        context.data_type_table.add_type(DataType::Struct(struct_type.clone()));
+        let (rest_context, result) = parse(context).unwrap();
+        assert_eq!(result, Array { children_type: Box::new(DataType::Struct(struct_type)), length: 32 });
+    }
+}

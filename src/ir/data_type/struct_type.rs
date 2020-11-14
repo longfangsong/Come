@@ -24,6 +24,7 @@ use nom::{
     IResult,
 };
 use std::{convert::TryInto, fmt, rc::Rc};
+use nom::character::complete::multispace0;
 
 /// A user defined struct
 #[derive(Clone, Debug, Hash, Ord, PartialOrd, PartialEq, Eq)]
@@ -59,8 +60,8 @@ fn parse_definition(context: ParsingContext) -> IResult<ParsingContext, Struct, 
             ))),
             delimited(
                 lift(in_multispace(tag("{"))),
-                many1(map(pair(data_type::parse, lift(tag(","))), |x| x.0)),
-                lift(in_multispace(tag("{"))),
+                many1(map(pair(data_type::parse, lift(pair(tag(","), multispace0))), |x| x.0)),
+                lift(in_multispace(tag("}"))),
             ),
         ),
         |((name, _, _, _, _, _), children_type)| Struct {
@@ -82,11 +83,11 @@ pub fn parse(context: ParsingContext) -> IResult<ParsingContext, Struct, Error> 
                 code: rest_code,
                 data_type_table: table.clone(),
             })
-            .into()
+                .into()
         })?;
         Ok((
             ParsingContext {
-                code,
+                code: rest_code,
                 data_type_table: table,
             },
             result.try_into().unwrap(),

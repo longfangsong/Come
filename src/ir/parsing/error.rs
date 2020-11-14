@@ -1,6 +1,7 @@
 use crate::ir::parsing::ParsingContext;
 use nom::{error::ErrorKind, IResult};
 
+#[derive(Debug)]
 pub enum Error<'a> {
     Unknown(()),
     ParseStrError(&'a str),
