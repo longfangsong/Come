@@ -94,6 +94,7 @@
 <span id="93">93</span>
 <span id="94">94</span>
 <span id="95">95</span>
+<span id="96">96</span>
 </pre><div class="example-wrap"><pre class="rust ">
 <span class="doccomment">//! A user defined struct</span>
 <span class="kw">use</span> <span class="kw">crate</span>::{
@@ -121,6 +122,7 @@
     <span class="ident">IResult</span>,
 };
 <span class="kw">use</span> <span class="ident">std</span>::{<span class="ident">convert</span>::<span class="ident">TryInto</span>, <span class="ident">fmt</span>, <span class="ident">rc</span>::<span class="ident">Rc</span>};
+<span class="kw">use</span> <span class="ident">nom</span>::<span class="ident">character</span>::<span class="ident">complete</span>::<span class="ident">multispace0</span>;
 
 <span class="doccomment">/// A user defined struct</span>
 <span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Clone</span>, <span class="ident">Debug</span>, <span class="ident">Hash</span>, <span class="ident">Ord</span>, <span class="ident">PartialOrd</span>, <span class="ident">PartialEq</span>, <span class="ident">Eq</span>)]</span>
@@ -156,8 +158,8 @@
             ))),
             <span class="ident">delimited</span>(
                 <span class="ident">lift</span>(<span class="ident">in_multispace</span>(<span class="ident">tag</span>(<span class="string">&quot;{&quot;</span>))),
-                <span class="ident">many1</span>(<span class="ident">map</span>(<span class="ident">pair</span>(<span class="ident">data_type</span>::<span class="ident">parse</span>, <span class="ident">lift</span>(<span class="ident">tag</span>(<span class="string">&quot;,&quot;</span>))), <span class="op">|</span><span class="ident">x</span><span class="op">|</span> <span class="ident">x</span>.<span class="number">0</span>)),
-                <span class="ident">lift</span>(<span class="ident">in_multispace</span>(<span class="ident">tag</span>(<span class="string">&quot;{&quot;</span>))),
+                <span class="ident">many1</span>(<span class="ident">map</span>(<span class="ident">pair</span>(<span class="ident">data_type</span>::<span class="ident">parse</span>, <span class="ident">lift</span>(<span class="ident">pair</span>(<span class="ident">tag</span>(<span class="string">&quot;,&quot;</span>), <span class="ident">multispace0</span>))), <span class="op">|</span><span class="ident">x</span><span class="op">|</span> <span class="ident">x</span>.<span class="number">0</span>)),
+                <span class="ident">lift</span>(<span class="ident">in_multispace</span>(<span class="ident">tag</span>(<span class="string">&quot;}&quot;</span>))),
             ),
         ),
         <span class="op">|</span>((<span class="ident">name</span>, <span class="kw">_</span>, <span class="kw">_</span>, <span class="kw">_</span>, <span class="kw">_</span>, <span class="kw">_</span>), <span class="ident">children_type</span>)<span class="op">|</span> <span class="ident">Struct</span> {
@@ -179,11 +181,11 @@
                 <span class="ident">code</span>: <span class="ident">rest_code</span>,
                 <span class="ident">data_type_table</span>: <span class="ident">table</span>.<span class="ident">clone</span>(),
             })
-            .<span class="ident">into</span>()
+                .<span class="ident">into</span>()
         })<span class="question-mark">?</span>;
         <span class="prelude-val">Ok</span>((
             <span class="ident">ParsingContext</span> {
-                <span class="ident">code</span>,
+                <span class="ident">code</span>: <span class="ident">rest_code</span>,
                 <span class="ident">data_type_table</span>: <span class="ident">table</span>,
             },
             <span class="ident">result</span>.<span class="ident">try_into</span>().<span class="ident">unwrap</span>(),
