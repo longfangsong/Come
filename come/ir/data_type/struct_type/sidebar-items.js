@@ -1,1 +1,1 @@
-initSidebarItems({"fn":[["parse",""]],"struct":[["Struct","A user defined struct"]]});
+initSidebarItems({"fn":[["parse",""],["parse_definition",""]],"struct":[["Struct","A user defined struct"]]});
