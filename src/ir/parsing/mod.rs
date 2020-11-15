@@ -1,12 +1,8 @@
 mod error;
 
 use crate::ir::data_type::DataTypeTable;
-use derive_more::From;
 pub use error::Error;
-use nom::{
-    error::{ErrorKind, ParseError},
-    IResult,
-};
+use nom::IResult;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ParsingContext<'a> {
@@ -15,19 +11,23 @@ pub struct ParsingContext<'a> {
 }
 
 impl<'a> ParsingContext<'a> {
-    fn new(code: &'a str, data_type_table: DataTypeTable) -> Self {
+    pub fn new(code: &'a str, data_type_table: DataTypeTable) -> Self {
         Self {
             code,
             data_type_table,
         }
+    }
+
+    pub fn from_str(s: &'a str) -> Self {
+        Self::new(s, DataTypeTable::new())
     }
 }
 
 pub fn lift<'a, T, F>(
     mut parser: F,
 ) -> impl FnMut(ParsingContext<'a>) -> IResult<ParsingContext<'a>, T, Error>
-    where
-        F: FnMut(&'a str) -> IResult<&'a str, T>,
+where
+    F: FnMut(&'a str) -> IResult<&'a str, T>,
 {
     move |context: ParsingContext<'a>| -> IResult<ParsingContext<'a>, T, Error> {
         let (code, data_type_table) = (context.code, context.data_type_table);

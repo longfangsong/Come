@@ -14,7 +14,7 @@ use integer::Integer;
 use crate::ir::parsing::{lift, Error, ParsingContext};
 use nom::{branch::alt, combinator::map, IResult};
 use std::{
-    collections::{HashMap, HashSet},
+    collections::HashMap,
     fmt::{self, Display, Formatter},
 };
 use struct_type::Struct;
@@ -47,7 +47,7 @@ pub struct DataTypeTable {
 }
 
 impl DataTypeTable {
-    fn new() -> Self {
+    pub fn new() -> Self {
         DataTypeTable {
             structs: HashMap::new(),
         }
@@ -59,7 +59,7 @@ impl DataTypeTable {
         if let DataType::Struct(x) = data_type {
             let name = x.name.clone();
             let result = DataType::Struct(x);
-            self.structs.insert(name, result.clone());
+            self.structs.insert(name, result);
         }
     }
 
@@ -81,33 +81,48 @@ pub fn parse(context: ParsingContext) -> IResult<ParsingContext, DataType, Error
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::ir::data_type::DataTypeTable;
     use crate::ir::parsing::ParsingContext;
 
     #[test]
     fn test_parse() {
         let code = "i32";
-        let table = DataTypeTable { structs: Default::default() };
-        let context = ParsingContext { code, data_type_table: table };
+        let context = ParsingContext::from_str(code);
         let (rest_context, result) = parse(context).unwrap();
-        assert_eq!(result, DataType::Integer(Integer { signed: true, bit_width: 32 }));
+        assert_eq!(
+            result,
+            DataType::Integer(Integer {
+                signed: true,
+                bit_width: 32,
+            })
+        );
 
         let i32_type = result;
-        let code = "%S = type { i32, i32, }";
-        let table = DataTypeTable { structs: Default::default() };
-        let context = ParsingContext { code, data_type_table: table };
+        let code = "%S = type { i32, i32 }";
+        let context = ParsingContext::new(code, rest_context.data_type_table);
         let (rest_context, result) = parse(context).unwrap();
-        assert_eq!(result, DataType::Struct(Struct { name: "S".to_string(), children_type: vec![i32_type.clone(), i32_type] }));
+        assert_eq!(
+            result,
+            DataType::Struct(Struct {
+                name: "S".to_string(),
+                children_type: vec![i32_type.clone(), i32_type],
+            })
+        );
 
         let old_result = result;
         let code = "S";
-        let context = ParsingContext { code, data_type_table: rest_context.data_type_table };
+        let context = ParsingContext::new(code, rest_context.data_type_table);
         let (rest_context, result) = parse(context).unwrap();
         assert_eq!(result, old_result);
 
         let code = "S[32]";
-        let context = ParsingContext { code, data_type_table: rest_context.data_type_table };
-        let (rest_context, result) = parse(context).unwrap();
-        assert_eq!(result, DataType::Array(Array { children_type: Box::new(old_result), length: 32 }));
+        let context = ParsingContext::new(code, rest_context.data_type_table);
+        let (_rest_context, result) = parse(context).unwrap();
+        assert_eq!(
+            result,
+            DataType::Array(Array {
+                children_type: Box::new(old_result),
+                length: 32,
+            })
+        );
     }
 }

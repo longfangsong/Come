@@ -1,12 +1,6 @@
 //! Definition and parser for [`Address`](crate::ir::data_type::address::Address) type.
 
-use crate::ir::parsing::{lift, Error, ParsingContext};
-use nom::{
-    bytes::complete::tag_no_case,
-    combinator::map,
-    error::{ErrorKind, ParseError},
-    IResult,
-};
+use nom::{bytes::complete::tag_no_case, combinator::map, IResult};
 use std::{fmt, fmt::Display};
 
 // todo: in the future we may want to support 64-bit systems

@@ -1,30 +1,24 @@
 //! A user defined struct
 use crate::{
     ir::{
-        data_type::{DataType, DataTypeTable},
+        data_type,
+        data_type::DataType,
+        parsing::{lift, Error, ParsingContext},
         util::parsing::local,
     },
     util::parsing::in_multispace,
 };
 
-use crate::{
-    ir::{
-        data_type,
-        parsing::{lift, Error, ParsingContext},
-    },
-    util::parsing,
-};
+use crate::util::parsing;
 use nom::{
-    branch::alt,
     bytes::complete::tag,
-    character::streaming::space0,
+    character::{complete::multispace0, streaming::space0},
     combinator::map,
-    multi::many1,
+    multi::separated_list0,
     sequence::{delimited, pair, tuple},
     IResult,
 };
-use std::{convert::TryInto, fmt, rc::Rc};
-use nom::character::complete::multispace0;
+use std::{convert::TryInto, fmt};
 
 /// A user defined struct
 #[derive(Clone, Debug, Hash, Ord, PartialOrd, PartialEq, Eq)]
@@ -60,7 +54,10 @@ fn parse_definition(context: ParsingContext) -> IResult<ParsingContext, Struct, 
             ))),
             delimited(
                 lift(in_multispace(tag("{"))),
-                many1(map(pair(data_type::parse, lift(pair(tag(","), multispace0))), |x| x.0)),
+                separated_list0(
+                    lift(tuple((multispace0, tag(","), multispace0))),
+                    data_type::parse,
+                ),
                 lift(in_multispace(tag("}"))),
             ),
         ),
@@ -83,7 +80,7 @@ pub fn parse(context: ParsingContext) -> IResult<ParsingContext, Struct, Error> 
                 code: rest_code,
                 data_type_table: table.clone(),
             })
-                .into()
+            .into()
         })?;
         Ok((
             ParsingContext {
