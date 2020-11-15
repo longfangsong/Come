@@ -17,7 +17,7 @@ use std::{
     collections::HashMap,
     fmt::{self, Display, Formatter},
 };
-use struct_type::Struct;
+pub use struct_type::Struct;
 
 /// A type of data
 #[derive(Clone, From, TryInto, Debug, Hash, Ord, PartialOrd, PartialEq, Eq)]
