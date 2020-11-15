@@ -19,22 +19,10 @@
 <span id="18">18</span>
 <span id="19">19</span>
 <span id="20">20</span>
-<span id="21">21</span>
-<span id="22">22</span>
-<span id="23">23</span>
-<span id="24">24</span>
-<span id="25">25</span>
-<span id="26">26</span>
 </pre><div class="example-wrap"><pre class="rust ">
 <span class="doccomment">//! Definition and parser for [`Address`](crate::ir::data_type::address::Address) type.</span>
 
-<span class="kw">use</span> <span class="kw">crate</span>::<span class="ident">ir</span>::<span class="ident">parsing</span>::{<span class="ident">lift</span>, <span class="ident">Error</span>, <span class="ident">ParsingContext</span>};
-<span class="kw">use</span> <span class="ident">nom</span>::{
-    <span class="ident">bytes</span>::<span class="ident">complete</span>::<span class="ident">tag_no_case</span>,
-    <span class="ident">combinator</span>::<span class="ident">map</span>,
-    <span class="ident">error</span>::{<span class="ident">ErrorKind</span>, <span class="ident">ParseError</span>},
-    <span class="ident">IResult</span>,
-};
+<span class="kw">use</span> <span class="ident">nom</span>::{<span class="ident">bytes</span>::<span class="ident">complete</span>::<span class="ident">tag_no_case</span>, <span class="ident">combinator</span>::<span class="ident">map</span>, <span class="ident">IResult</span>};
 <span class="kw">use</span> <span class="ident">std</span>::{<span class="ident">fmt</span>, <span class="ident">fmt</span>::<span class="ident">Display</span>};
 
 <span class="comment">// todo: in the future we may want to support 64-bit systems</span>
