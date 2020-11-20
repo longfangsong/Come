@@ -26,6 +26,15 @@ impl fmt::Display for Integer {
     }
 }
 
+impl Integer {
+    pub fn new(signed: bool, bit_width: usize) -> Self {
+        Self {
+            signed,
+            bit_width,
+        }
+    }
+}
+
 pub fn parse(code: &str) -> IResult<&str, Integer> {
     alt((
         map(pair(tag("i"), digit1), |(_, width_str)| Integer {

@@ -17,17 +17,27 @@ pub use jump::Jump;
 pub use load::Load;
 pub use phi::Phi;
 pub use store::Store;
+use crate::ir::basic_block::{BasicBlockBuilder, BasicBlock};
+use std::rc::Rc;
+use std::fmt::Debug;
+use derive_more::From;
 
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub enum Statement {
-    Alloca,
-    Load,
-    Store,
-    BinaryOperation,
-    GetField,
-    GetIndex,
+    Alloca(Alloca),
+    Load(Load),
+    Store(Store),
+    BinaryOperation(BinaryOperation),
+    GetField(GetField),
+    GetIndex(GetIndex),
 }
 
+#[derive(Clone, Debug, Eq, PartialEq, From)]
 pub enum Terminator {
-    Jump,
-    Branch,
+    Jump(Jump),
+    Branch(Branch),
+}
+
+pub trait TerminatorBuilder: Debug {
+    fn on_other_basic_block_done(&mut self, builder: Rc<BasicBlock>) -> Option<Terminator>;
 }

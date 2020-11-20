@@ -79,6 +79,9 @@ pub fn parse(context: ParsingContext) -> IResult<ParsingContext, Struct, Error> 
             Error::ParseContextError(ParsingContext {
                 code: rest_code,
                 data_type_table: table.clone(),
+                parsed_functions: vec![],
+                completed_basic_blocks: vec![],
+                uncompleted_basic_blocks: vec![]
             })
             .into()
         })?;
@@ -86,6 +89,9 @@ pub fn parse(context: ParsingContext) -> IResult<ParsingContext, Struct, Error> 
             ParsingContext {
                 code: rest_code,
                 data_type_table: table,
+                parsed_functions: vec![],
+                completed_basic_blocks: vec![],
+                uncompleted_basic_blocks: vec![]
             },
             result.try_into().unwrap(),
         ))

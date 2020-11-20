@@ -1,9 +1,9 @@
 //! This module describe the data types exists in Come IR
-mod address;
-mod array;
-mod integer;
-mod space;
-mod struct_type;
+pub(in crate::ir) mod address;
+pub(in crate::ir) mod array;
+pub(in crate::ir) mod integer;
+pub(in crate::ir) mod space;
+pub(in crate::ir) mod struct_type;
 
 use crate::ir::data_type::space::Space;
 use address::Address;
@@ -98,7 +98,7 @@ mod tests {
 
         let i32_type = result;
         let code = "%S = type { i32, i32 }";
-        let context = ParsingContext::new(code, rest_context.data_type_table);
+        let context = ParsingContext::new(code, rest_context.data_type_table, vec![]);
         let (rest_context, result) = parse(context).unwrap();
         assert_eq!(
             result,
@@ -110,12 +110,12 @@ mod tests {
 
         let old_result = result;
         let code = "S";
-        let context = ParsingContext::new(code, rest_context.data_type_table);
+        let context = ParsingContext::new(code, rest_context.data_type_table, vec![]);
         let (rest_context, result) = parse(context).unwrap();
         assert_eq!(result, old_result);
 
         let code = "S[32]";
-        let context = ParsingContext::new(code, rest_context.data_type_table);
+        let context = ParsingContext::new(code, rest_context.data_type_table, vec![]);
         let (_rest_context, result) = parse(context).unwrap();
         assert_eq!(
             result,

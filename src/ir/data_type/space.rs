@@ -18,6 +18,12 @@ impl Display for Space {
     }
 }
 
+impl Space {
+    pub fn new(bit_width: usize) -> Self {
+        Space { bit_width }
+    }
+}
+
 pub fn parse(code: &str) -> IResult<&str, Space> {
     map(
         pair(

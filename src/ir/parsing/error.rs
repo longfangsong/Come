@@ -1,4 +1,4 @@
-use crate::ir::parsing::ParsingContext;
+use crate::ir::parsing::context::ParsingContext;
 use nom::error::ErrorKind;
 
 #[derive(Debug)]

@@ -72,6 +72,9 @@ mod tests {
         let mut context = ParsingContext {
             code,
             data_type_table: DataTypeTable::new(),
+            parsed_functions: vec![],
+            completed_basic_blocks: vec![],
+            uncompleted_basic_blocks: vec![]
         };
         let (_rest_context, result) = parse(context.clone()).unwrap();
         assert_eq!(
