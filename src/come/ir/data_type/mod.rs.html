@@ -129,11 +129,11 @@
 <span id="128">128</span>
 </pre><div class="example-wrap"><pre class="rust ">
 <span class="doccomment">//! This module describe the data types exists in Come IR</span>
-<span class="kw">mod</span> <span class="ident">address</span>;
-<span class="kw">mod</span> <span class="ident">array</span>;
-<span class="kw">mod</span> <span class="ident">integer</span>;
-<span class="kw">mod</span> <span class="ident">space</span>;
-<span class="kw">mod</span> <span class="ident">struct_type</span>;
+<span class="kw">pub</span>(<span class="kw">in</span> <span class="kw">crate</span>::<span class="ident">ir</span>) <span class="kw">mod</span> <span class="ident">address</span>;
+<span class="kw">pub</span>(<span class="kw">in</span> <span class="kw">crate</span>::<span class="ident">ir</span>) <span class="kw">mod</span> <span class="ident">array</span>;
+<span class="kw">pub</span>(<span class="kw">in</span> <span class="kw">crate</span>::<span class="ident">ir</span>) <span class="kw">mod</span> <span class="ident">integer</span>;
+<span class="kw">pub</span>(<span class="kw">in</span> <span class="kw">crate</span>::<span class="ident">ir</span>) <span class="kw">mod</span> <span class="ident">space</span>;
+<span class="kw">pub</span>(<span class="kw">in</span> <span class="kw">crate</span>::<span class="ident">ir</span>) <span class="kw">mod</span> <span class="ident">struct_type</span>;
 
 <span class="kw">use</span> <span class="kw">crate</span>::<span class="ident">ir</span>::<span class="ident">data_type</span>::<span class="ident">space</span>::<span class="ident">Space</span>;
 <span class="kw">use</span> <span class="ident">address</span>::<span class="ident">Address</span>;
@@ -228,7 +228,7 @@
 
         <span class="kw">let</span> <span class="ident">i32_type</span> <span class="op">=</span> <span class="ident">result</span>;
         <span class="kw">let</span> <span class="ident">code</span> <span class="op">=</span> <span class="string">&quot;%S = type { i32, i32 }&quot;</span>;
-        <span class="kw">let</span> <span class="ident">context</span> <span class="op">=</span> <span class="ident">ParsingContext</span>::<span class="ident">new</span>(<span class="ident">code</span>, <span class="ident">rest_context</span>.<span class="ident">data_type_table</span>);
+        <span class="kw">let</span> <span class="ident">context</span> <span class="op">=</span> <span class="ident">ParsingContext</span>::<span class="ident">new</span>(<span class="ident">code</span>, <span class="ident">rest_context</span>.<span class="ident">data_type_table</span>, <span class="macro">vec</span><span class="macro">!</span>[]);
         <span class="kw">let</span> (<span class="ident">rest_context</span>, <span class="ident">result</span>) <span class="op">=</span> <span class="ident">parse</span>(<span class="ident">context</span>).<span class="ident">unwrap</span>();
         <span class="macro">assert_eq</span><span class="macro">!</span>(
             <span class="ident">result</span>,
@@ -240,12 +240,12 @@
 
         <span class="kw">let</span> <span class="ident">old_result</span> <span class="op">=</span> <span class="ident">result</span>;
         <span class="kw">let</span> <span class="ident">code</span> <span class="op">=</span> <span class="string">&quot;S&quot;</span>;
-        <span class="kw">let</span> <span class="ident">context</span> <span class="op">=</span> <span class="ident">ParsingContext</span>::<span class="ident">new</span>(<span class="ident">code</span>, <span class="ident">rest_context</span>.<span class="ident">data_type_table</span>);
+        <span class="kw">let</span> <span class="ident">context</span> <span class="op">=</span> <span class="ident">ParsingContext</span>::<span class="ident">new</span>(<span class="ident">code</span>, <span class="ident">rest_context</span>.<span class="ident">data_type_table</span>, <span class="macro">vec</span><span class="macro">!</span>[]);
         <span class="kw">let</span> (<span class="ident">rest_context</span>, <span class="ident">result</span>) <span class="op">=</span> <span class="ident">parse</span>(<span class="ident">context</span>).<span class="ident">unwrap</span>();
         <span class="macro">assert_eq</span><span class="macro">!</span>(<span class="ident">result</span>, <span class="ident">old_result</span>);
 
         <span class="kw">let</span> <span class="ident">code</span> <span class="op">=</span> <span class="string">&quot;S[32]&quot;</span>;
-        <span class="kw">let</span> <span class="ident">context</span> <span class="op">=</span> <span class="ident">ParsingContext</span>::<span class="ident">new</span>(<span class="ident">code</span>, <span class="ident">rest_context</span>.<span class="ident">data_type_table</span>);
+        <span class="kw">let</span> <span class="ident">context</span> <span class="op">=</span> <span class="ident">ParsingContext</span>::<span class="ident">new</span>(<span class="ident">code</span>, <span class="ident">rest_context</span>.<span class="ident">data_type_table</span>, <span class="macro">vec</span><span class="macro">!</span>[]);
         <span class="kw">let</span> (<span class="ident">_rest_context</span>, <span class="ident">result</span>) <span class="op">=</span> <span class="ident">parse</span>(<span class="ident">context</span>).<span class="ident">unwrap</span>();
         <span class="macro">assert_eq</span><span class="macro">!</span>(
             <span class="ident">result</span>,

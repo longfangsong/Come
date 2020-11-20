@@ -101,6 +101,9 @@
 <span id="100">100</span>
 <span id="101">101</span>
 <span id="102">102</span>
+<span id="103">103</span>
+<span id="104">104</span>
+<span id="105">105</span>
 </pre><div class="example-wrap"><pre class="rust ">
 <span class="doccomment">//! An array of other type</span>
 <span class="kw">use</span> <span class="kw">crate</span>::<span class="ident">ir</span>::<span class="ident">data_type</span>::{<span class="ident">address</span>, <span class="ident">integer</span>, <span class="ident">DataType</span>};
@@ -176,6 +179,9 @@
         <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">context</span> <span class="op">=</span> <span class="ident">ParsingContext</span> {
             <span class="ident">code</span>,
             <span class="ident">data_type_table</span>: <span class="ident">DataTypeTable</span>::<span class="ident">new</span>(),
+            <span class="ident">parsed_functions</span>: <span class="macro">vec</span><span class="macro">!</span>[],
+            <span class="ident">completed_basic_blocks</span>: <span class="macro">vec</span><span class="macro">!</span>[],
+            <span class="ident">uncompleted_basic_blocks</span>: <span class="macro">vec</span><span class="macro">!</span>[]
         };
         <span class="kw">let</span> (<span class="ident">_rest_context</span>, <span class="ident">result</span>) <span class="op">=</span> <span class="ident">parse</span>(<span class="ident">context</span>.<span class="ident">clone</span>()).<span class="ident">unwrap</span>();
         <span class="macro">assert_eq</span><span class="macro">!</span>(

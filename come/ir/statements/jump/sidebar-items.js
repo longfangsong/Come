@@ -1,1 +1,1 @@
-initSidebarItems({"struct":[["Jump",""]]});
+initSidebarItems({"struct":[["Jump",""],["JumpBuilder",""]]});

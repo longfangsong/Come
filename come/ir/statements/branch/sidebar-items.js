@@ -1,1 +1,1 @@
-initSidebarItems({"enum":[["BranchType",""]],"struct":[["Branch",""]]});
+initSidebarItems({"enum":[["BranchParent",""],["BranchType",""]],"struct":[["Branch",""],["BranchBuilder",""]]});

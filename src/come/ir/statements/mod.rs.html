@@ -32,6 +32,16 @@
 <span id="31">31</span>
 <span id="32">32</span>
 <span id="33">33</span>
+<span id="34">34</span>
+<span id="35">35</span>
+<span id="36">36</span>
+<span id="37">37</span>
+<span id="38">38</span>
+<span id="39">39</span>
+<span id="40">40</span>
+<span id="41">41</span>
+<span id="42">42</span>
+<span id="43">43</span>
 </pre><div class="example-wrap"><pre class="rust ">
 <span class="kw">mod</span> <span class="ident">alloca</span>;
 <span class="kw">mod</span> <span class="ident">binary_operation</span>;
@@ -52,19 +62,29 @@
 <span class="kw">pub</span> <span class="kw">use</span> <span class="ident">load</span>::<span class="ident">Load</span>;
 <span class="kw">pub</span> <span class="kw">use</span> <span class="ident">phi</span>::<span class="ident">Phi</span>;
 <span class="kw">pub</span> <span class="kw">use</span> <span class="ident">store</span>::<span class="ident">Store</span>;
+<span class="kw">use</span> <span class="kw">crate</span>::<span class="ident">ir</span>::<span class="ident">basic_block</span>::{<span class="ident">BasicBlockBuilder</span>, <span class="ident">BasicBlock</span>};
+<span class="kw">use</span> <span class="ident">std</span>::<span class="ident">rc</span>::<span class="ident">Rc</span>;
+<span class="kw">use</span> <span class="ident">std</span>::<span class="ident">fmt</span>::<span class="ident">Debug</span>;
+<span class="kw">use</span> <span class="ident">derive_more</span>::<span class="ident">From</span>;
 
+<span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Clone</span>, <span class="ident">Debug</span>, <span class="ident">Eq</span>, <span class="ident">PartialEq</span>)]</span>
 <span class="kw">pub</span> <span class="kw">enum</span> <span class="ident">Statement</span> {
-    <span class="ident">Alloca</span>,
-    <span class="ident">Load</span>,
-    <span class="ident">Store</span>,
-    <span class="ident">BinaryOperation</span>,
-    <span class="ident">GetField</span>,
-    <span class="ident">GetIndex</span>,
+    <span class="ident">Alloca</span>(<span class="ident">Alloca</span>),
+    <span class="ident">Load</span>(<span class="ident">Load</span>),
+    <span class="ident">Store</span>(<span class="ident">Store</span>),
+    <span class="ident">BinaryOperation</span>(<span class="ident">BinaryOperation</span>),
+    <span class="ident">GetField</span>(<span class="ident">GetField</span>),
+    <span class="ident">GetIndex</span>(<span class="ident">GetIndex</span>),
 }
 
+<span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Clone</span>, <span class="ident">Debug</span>, <span class="ident">Eq</span>, <span class="ident">PartialEq</span>, <span class="ident">From</span>)]</span>
 <span class="kw">pub</span> <span class="kw">enum</span> <span class="ident">Terminator</span> {
-    <span class="ident">Jump</span>,
-    <span class="ident">Branch</span>,
+    <span class="ident">Jump</span>(<span class="ident">Jump</span>),
+    <span class="ident">Branch</span>(<span class="ident">Branch</span>),
+}
+
+<span class="kw">pub</span> <span class="kw">trait</span> <span class="ident">TerminatorBuilder</span>: <span class="ident">Debug</span> {
+    <span class="kw">fn</span> <span class="ident">on_other_basic_block_done</span>(<span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="self">self</span>, <span class="ident">builder</span>: <span class="ident">Rc</span><span class="op">&lt;</span><span class="ident">BasicBlock</span><span class="op">&gt;</span>) <span class="op">-&gt;</span> <span class="prelude-ty">Option</span><span class="op">&lt;</span><span class="ident">Terminator</span><span class="op">&gt;</span>;
 }
 </pre></div>
 </section><section id="search" class="content hidden"></section><section class="footer"></section><script>window.rootPath = "../../../../";window.currentCrate = "come";</script><script src="../../../../main.js"></script><script src="../../../../source-script.js"></script><script src="../../../../source-files.js"></script><script defer src="../../../../search-index.js"></script></body></html>

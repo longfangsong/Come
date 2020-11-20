@@ -1,1 +1,1 @@
-initSidebarItems({"struct":[["BasicBlock",""]]});
+initSidebarItems({"struct":[["BasicBlock",""],["BasicBlockBuilder",""]]});
