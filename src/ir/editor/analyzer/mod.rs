@@ -2,7 +2,7 @@ use crate::ir::{self, FunctionDefinition};
 
 use self::register_usage::RegisterUsageAnalyzer;
 pub use self::{
-    control_flow::{BindedControlFlowGraph, ControlFlowGraph, Loop, LoopContent},
+    control_flow::{BindedControlFlowGraph, ControlFlowGraph, Loop, LoopContent, Node},
     memory_usage::{BindedMemoryUsage, MemoryUsage},
     register_usage::{BindedRegisterUsage, BindedRegisterUsageAnalyzer},
 };
@@ -53,13 +53,13 @@ impl<'item, 'bind: 'item> BindedAnalyzer<'item, 'bind> {
 }
 
 impl<'item, 'bind: 'item> IsAnalyzer<'item, 'bind> for Analyzer {
+    type Binded = BindedAnalyzer<'item, 'bind>;
+
     fn on_action(&mut self, action: &Action) {
         self.register_usage.on_action(action);
         self.memory_usage.on_action(action);
         self.control_flow_graph.on_action(action);
     }
-
-    type Binded = BindedAnalyzer<'item, 'bind>;
 
     fn bind(&'item self, content: &'bind ir::FunctionDefinition) -> Self::Binded {
         BindedAnalyzer {

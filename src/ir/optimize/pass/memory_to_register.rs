@@ -73,9 +73,10 @@ fn insert_phi_positions(
         let mut done_bb_index = Vec::new();
         while let Some(considering_bb_index) = pending_bb_indexes.pop() {
             done_bb_index.push(considering_bb_index);
-            let dominator_frontier_bb_indexes =
-                control_flow_graph.dominance_frontier(considering_bb_index);
-            for &to_bb_index in dominator_frontier_bb_indexes {
+            let dominator_frontier_nodes =
+                control_flow_graph.dominance_frontier(considering_bb_index.into());
+            for to_node in dominator_frontier_nodes {
+                let to_bb_index = to_node.to_block_index();
                 result.push((variable_name.0.clone(), to_bb_index));
                 // it's possible we put a phi node to a new block which contains no
                 // store to this variable in the past, in such cases we should look at the bacic block
@@ -186,8 +187,9 @@ fn decide_values_start_from(
                 to_remove.push((consider_block_index, statement_index));
             }
             IRStatement::Branch(branch) => {
-                let success_block =
-                    control_flow_graph.basic_block_index_by_name(&branch.success_label);
+                let success_block = control_flow_graph
+                    .node_by_basic_block_name(&branch.success_label)
+                    .to_block_index();
                 current_variable_value.push(HashMap::new());
                 let (mut inner_to_rename, mut inner_to_remove, mut subnodes_on_success) =
                     decide_values_start_from(
@@ -203,8 +205,9 @@ fn decide_values_start_from(
                 to_remove.append(&mut inner_to_remove);
                 current_variable_value.pop();
                 current_variable_value.push(HashMap::new());
-                let failure_block =
-                    control_flow_graph.basic_block_index_by_name(&branch.failure_label);
+                let failure_block = control_flow_graph
+                    .node_by_basic_block_name(&branch.failure_label)
+                    .to_block_index();
                 let (mut inner_to_rename, mut inner_to_remove, mut subnodes_on_failure) =
                     decide_values_start_from(
                         function,
@@ -220,7 +223,9 @@ fn decide_values_start_from(
                 current_variable_value.pop();
             }
             IRStatement::Jump(jump) => {
-                let jump_to_block = control_flow_graph.basic_block_index_by_name(&jump.label);
+                let jump_to_block = control_flow_graph
+                    .node_by_basic_block_name(&jump.label)
+                    .to_block_index();
                 let (mut inner_to_rename, mut inner_to_remove, mut subnodes_on_jump) =
                     decide_values_start_from(
                         function,

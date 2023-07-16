@@ -217,13 +217,19 @@ impl RegisterUsageAnalyzer {
             for use_block in use_blocks {
                 result.extend(
                     control_flow_graph
-                        .may_pass_blocks(define_block, use_block)
-                        .iter(),
+                        .may_pass_blocks(define_block.into(), use_block.into())
+                        .iter()
+                        .map(|it| it.to_block_index()),
                 );
             }
         } else {
             for use_block in use_blocks {
-                result.extend(control_flow_graph.may_pass_blocks(0, use_block).iter());
+                result.extend(
+                    control_flow_graph
+                        .may_pass_blocks(0.into(), use_block.into())
+                        .iter()
+                        .map(|it| it.to_block_index()),
+                );
             }
         }
         result.sort();

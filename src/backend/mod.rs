@@ -1,4 +1,4 @@
 /// RISC-V backend.
 pub mod riscv;
 
-pub mod wasm;
+// pub mod wasm;

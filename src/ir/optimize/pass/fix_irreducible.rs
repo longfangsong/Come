@@ -1,6 +1,7 @@
 use super::IsPass;
 use crate::{
     ir::{
+        analyzer::Node,
         statement::{
             branch::BranchType, phi::PhiSource, BinaryCalculate, Branch, IRStatement, Jump, Phi,
         },
@@ -22,7 +23,7 @@ pub enum GoToCondition {
 
 // If `condition` is true, the connections from `from` should be redirected
 struct ShouldGoTo {
-    from: usize,
+    from: Node,
     condition: GoToCondition,
     dispatcher: usize,
     on_success_branch: bool,
@@ -115,14 +116,22 @@ fn fix_branch_into_source(
     let header_block_name = format!("{loop_name}_dispatcher_at_{header}");
     let branch_to_block_name = editor.content[branch_to].name.clone().unwrap();
     let mut should_go_tos = Vec::new();
-    for from_block in from_blocks {
-        let from_block = from_block.index();
-        let mut from_block_last_statement =
-            editor.content[from_block].content.last().unwrap().clone();
-        editor.remove_statement((from_block, editor.content[from_block].content.len() - 1));
+    for &from_block in from_blocks {
+        let from_block: Node = from_block.into();
+        let from_block_index: usize = from_block.to_block_index();
+        let mut from_block_last_statement = editor.content[from_block_index]
+            .content
+            .last()
+            .unwrap()
+            .clone();
+        editor.remove_statement((
+            from_block_index,
+            editor.content[from_block_index].content.len() - 1,
+        ));
 
-        let condition_register: RegisterName =
-            RegisterName(format!("{loop_name}_goto_{branch_to}_in_{from_block}"));
+        let condition_register: RegisterName = RegisterName(format!(
+            "{loop_name}_goto_{branch_to}_in_{from_block_index}"
+        ));
         let should_go_to = match &mut from_block_last_statement {
             IRStatement::Branch(branch) => {
                 if branch.success_label == header_block_name {
@@ -141,7 +150,7 @@ fn fix_branch_into_source(
                         }
                         .into(),
                     };
-                    editor.push_back_statement(from_block, condition_statement);
+                    editor.push_back_statement(from_block_index, condition_statement);
                     from_block_last_statement = Jump {
                         label: header_block_name.clone(),
                     }
@@ -158,7 +167,7 @@ fn fix_branch_into_source(
                         }
                         .into(),
                     };
-                    editor.push_back_statement(from_block, condition_statement);
+                    editor.push_back_statement(from_block_index, condition_statement);
                     from_block_last_statement = Jump {
                         label: header_block_name.clone(),
                     }
@@ -175,7 +184,7 @@ fn fix_branch_into_source(
                         }
                         .into(),
                     };
-                    editor.push_back_statement(from_block, condition_statement);
+                    editor.push_back_statement(from_block_index, condition_statement);
                     branch.success_label = header_block_name.clone();
                 } else {
                     let condition_statement = BinaryCalculate {
@@ -192,7 +201,7 @@ fn fix_branch_into_source(
                         }
                         .into(),
                     };
-                    editor.push_back_statement(from_block, condition_statement);
+                    editor.push_back_statement(from_block_index, condition_statement);
                     branch.failure_label = header_block_name.clone();
                 }
                 ShouldGoTo {
@@ -213,7 +222,7 @@ fn fix_branch_into_source(
             }
             _ => unreachable!(),
         };
-        editor.push_back_statement(from_block, from_block_last_statement);
+        editor.push_back_statement(from_block_index, from_block_last_statement);
         should_go_tos.push(should_go_to);
     }
     should_go_tos
@@ -260,7 +269,7 @@ fn generate_phis(
                     block: editor
                         .binded_analyzer()
                         .control_flow_graph()
-                        .basic_block_name_by_index(should_go_to_item.from)
+                        .basic_block_name_by_node(should_go_to_item.from)
                         .to_string(),
                 })
                 .chain(not_related_sources.into_iter().map(|it| {
@@ -269,7 +278,7 @@ fn generate_phis(
                         block: editor
                             .binded_analyzer()
                             .control_flow_graph()
-                            .basic_block_name_by_index(*it)
+                            .basic_block_name_by_node(*it)
                             .to_string(),
                     }
                 }))
@@ -297,7 +306,7 @@ impl IsPass for FixIrreducible {
                 control_flow_graph.loops().first_irreducible_loop()
             {
                 (
-                    irreducible_loop.entry_info(control_flow_graph.graph()),
+                    irreducible_loop.entry_info(&control_flow_graph),
                     irreducible_loop.name(),
                 )
             } else {

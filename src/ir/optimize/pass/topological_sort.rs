@@ -18,7 +18,7 @@ impl IsPass for TopologicalSort {
         let analyzer = editor.analyzer.bind(&editor.content);
         let graph = analyzer.control_flow_graph();
         let loops = graph.loops();
-        let content: Vec<_> = topological_order(&graph, &loops)
+        let content: Vec<_> = topological_order(&graph, loops)
             .into_iter()
             .map(|it| mem::take(&mut editor.content.content[it]))
             .collect();
@@ -47,37 +47,42 @@ fn topological_order_dfs(
     visited.push(current_at);
     let in_loop = top_level.smallest_loop_node_in(current_at);
     let mut to_visit = graph
-        .graph()
-        .neighbors_directed(current_at, Direction::Outgoing)
-        .filter(|it| !result.contains(it))
+        .successors(current_at.into())
+        .filter(|it| !result.contains(&it.to_block_index().into()))
         .collect::<Vec<_>>();
-    to_visit.sort_by_cached_key(|to_visit_node| {
-        let forward_of_to_visit_node = graph
-            .graph()
-            .neighbors_directed(*to_visit_node, Direction::Incoming)
-            .filter(|forward_node| {
-                !graph
-                    .dominates(to_visit_node.index())
-                    .contains(&forward_node.index())
-            });
+    to_visit.sort_by_cached_key(|&to_visit_node| {
+        let forward_of_to_visit_node =
+            graph
+                .predecessors(to_visit_node)
+                .filter(|&forward_node| {
+                    !graph
+                        .dominates(to_visit_node)
+                        .contains(&forward_node)
+                })
+                .collect_vec();
         // first visit those nodes which current_at is the only parent of to_visit_node
-        if forward_of_to_visit_node.clone().count() == 1 {
+        if forward_of_to_visit_node.len() == 1 {
             let forward_node = forward_of_to_visit_node.into_iter().next().unwrap();
             let at_index = graph
-                .graph()
-                .neighbors_directed(forward_node, Direction::Outgoing)
-                .position(|it| it == *to_visit_node)
+                .successors(forward_node)
+                .position(|it| it == to_visit_node)
                 .unwrap();
             return 2 + at_index;
         }
         // we should visit all nodes in this loop before the others
-        if let Some(in_loop) = in_loop && in_loop.is_node_in(*to_visit_node) {
+        if let Some(in_loop) = in_loop && in_loop.is_node_in(to_visit_node.to_block_index().into()) {
             return 1;
         }
         0
     });
     for to_visit_node in to_visit {
-        topological_order_dfs(graph, top_level, to_visit_node, visited, result);
+        topological_order_dfs(
+            graph,
+            top_level,
+            to_visit_node.to_block_index().into(),
+            visited,
+            result,
+        );
     }
     result.push(current_at);
 }
@@ -88,7 +93,6 @@ pub fn topological_order(graph: &BindedControlFlowGraph, top_level: &Loop) -> Ve
     topological_order_dfs(graph, top_level, 0.into(), &mut visited, &mut order);
     order.reverse();
     let mut order: Vec<usize> = order.into_iter().map(NodeIndex::index).collect();
-    dbg!(&order);
     let exit_block_position = order.iter().position_max().unwrap();
     order.remove(exit_block_position);
     order

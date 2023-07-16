@@ -1,10 +1,11 @@
 mod control_flow_loop;
-use std::{
-    cell::{OnceCell, Ref, RefCell},
-    collections::HashMap,
+use super::IsAnalyzer;
+use crate::{
+    ir::{self, editor::action::Action, statement::IRStatement, FunctionDefinition},
+    utility::{self},
 };
-
 use bimap::BiMap;
+pub use control_flow_loop::{Loop, LoopContent};
 use itertools::Itertools;
 use petgraph::{
     algo::{
@@ -13,57 +14,71 @@ use petgraph::{
     },
     prelude::*,
 };
-
-use crate::{
-    ir::{self, editor::action::Action, statement::IRStatement, FunctionDefinition},
-    utility::{self},
+use std::{
+    cell::{OnceCell, Ref, RefCell},
+    collections::HashMap,
 };
 
-use super::IsAnalyzer;
-pub use control_flow_loop::{Loop, LoopContent};
+/// A node in the control flow graph.
+/// For preventing using wrong index to access the graph,
+/// we introduced a new type here instead of using naive usize.
+#[derive(Debug, Clone, Copy, Hash, PartialEq, Eq, PartialOrd, Ord)]
+pub struct Node(usize);
 
-/// [`ControlFlowGraph`] is the control flow graph and related infomation of a function.
+impl Node {
+    pub fn to_block_index(self) -> usize {
+        self.0
+    }
+}
+
+impl From<NodeIndex<usize>> for Node {
+    fn from(node_index: NodeIndex<usize>) -> Self {
+        Self(node_index.index())
+    }
+}
+
+impl From<usize> for Node {
+    fn from(node_index: usize) -> Self {
+        Self(node_index)
+    }
+}
+
 #[derive(Debug)]
-pub struct ControlFlowGraphContent {
+struct ControlFlowGraphContent {
     graph: DiGraph<(), (), usize>,
-    frontiers: HashMap<usize, Vec<usize>>,
-    bb_name_index_map: BiMap<usize, String>,
+    frontiers: HashMap<Node, Vec<Node>>,
+    bb_name_node_map: BiMap<Node, String>,
     dominators: Dominators<NodeIndex<usize>>,
-    // fixme: remove this refcell!
-    from_to_may_pass_blocks: RefCell<HashMap<(usize, usize), Vec<usize>>>,
+    from_to_may_pass_blocks: RefCell<HashMap<(Node, Node), Vec<Node>>>,
 }
 
 impl ControlFlowGraphContent {
-    /// Create a [`ControlFlowGraph`] from a [`FunctionDefinition`].
-    pub fn new(function_definition: &FunctionDefinition) -> Self {
+    fn new(function_definition: &FunctionDefinition) -> Self {
         let mut graph = DiGraph::<(), (), usize>::default();
         let bb_name_index_map: BiMap<_, _> = function_definition
             .content
             .iter()
             .enumerate()
-            .map(|(index, bb)| (index, bb.name.as_ref().unwrap().clone()))
+            .map(|(index, bb)| (Node(index), bb.name.as_ref().unwrap().clone()))
             .collect();
-        for (bb_index, bb) in function_definition.content.iter().enumerate() {
+        for (node, bb) in function_definition.content.iter().enumerate() {
             let last_statement = bb.content.last().unwrap();
             match last_statement {
                 IRStatement::Branch(branch) => {
-                    let success_node_index = *bb_name_index_map
+                    let success_node = *bb_name_index_map
                         .get_by_right(&branch.success_label)
                         .unwrap();
-                    let failure_node_index = *bb_name_index_map
+                    let failure_node = *bb_name_index_map
                         .get_by_right(&branch.failure_label)
                         .unwrap();
-                    graph.extend_with_edges([
-                        (bb_index, success_node_index),
-                        (bb_index, failure_node_index),
-                    ]);
+                    graph.extend_with_edges([(node, success_node.0), (node, failure_node.0)]);
                 }
                 IRStatement::Jump(jump) => {
-                    let to_node_index = *bb_name_index_map.get_by_right(&jump.label).unwrap();
-                    graph.extend_with_edges([(bb_index, to_node_index)]);
+                    let to_node = *bb_name_index_map.get_by_right(&jump.label).unwrap();
+                    graph.extend_with_edges([(node, to_node.0)]);
                 }
                 IRStatement::Ret(_) => {
-                    graph.extend_with_edges([(bb_index, function_definition.content.len())]);
+                    graph.extend_with_edges([(node, function_definition.content.len())]);
                 }
                 _ => unreachable!(),
             }
@@ -72,66 +87,72 @@ impl ControlFlowGraphContent {
         let graph = remove_unreachable_nodes(graph);
         let frontiers = utility::graph::dominance_frontiers(&dorminators, &graph)
             .into_iter()
-            .map(|(k, v)| (k.index(), v.into_iter().map(NodeIndex::index).collect()))
+            .map(|(k, v)| {
+                (
+                    Node(k.index()),
+                    v.into_iter().map(NodeIndex::index).map(Node).collect(),
+                )
+            })
             .collect();
         Self {
             graph,
             frontiers,
             dominators: dorminators,
-            bb_name_index_map,
+            bb_name_node_map: bb_name_index_map,
             from_to_may_pass_blocks: RefCell::new(HashMap::new()),
         }
     }
 
-    /// [Dorminance Frontier](https://en.wikipedia.org/wiki/Dominator_(graph_theory)) of basic block indexed by `bb_index`.
-    pub fn dominance_frontier(&self, bb_index: usize) -> &[usize] {
-        self.frontiers.get(&bb_index).unwrap()
+    fn dominance_frontier(&self, node: Node) -> &[Node] {
+        self.frontiers.get(&node).unwrap()
     }
 
-    fn dominates_calculate(&self, visiting: usize, visited: &mut Vec<usize>) {
+    fn dominates_calculate(&self, visiting: Node, visited: &mut Vec<Node>) {
         if visited.contains(&visiting) {
             return;
         }
         visited.push(visiting);
-        let mut imm_dominates: Vec<usize> = self.immediately_dominates(visiting);
+        let mut imm_dominates = self.immediately_dominates(visiting);
         imm_dominates.retain(|it| !visited.contains(it));
         for it in imm_dominates {
             self.dominates_calculate(it, visited);
         }
     }
 
-    fn immediately_dominates(&self, node: usize) -> Vec<usize> {
+    fn immediately_dominates(&self, node: Node) -> Vec<Node> {
         self.dominators
-            .immediately_dominated_by(node.into())
-            .map(|it| it.index())
+            .immediately_dominated_by(node.0.into())
+            .map(|it| Node(it.index()))
             .collect()
     }
 
-    pub fn dominates(&self, node: usize) -> Vec<usize> {
+    fn dominates(&self, node: Node) -> Vec<Node> {
         let mut visited = Vec::new();
         self.dominates_calculate(node, &mut visited);
         visited
     }
 
-    /// Get the index of basic block named `name`.
-    pub fn basic_block_index_by_name(&self, name: &str) -> usize {
-        *self.bb_name_index_map.get_by_right(name).unwrap()
+    fn node_by_basic_block_name(&self, name: &str) -> Node {
+        *self.bb_name_node_map.get_by_right(name).unwrap()
     }
 
-    /// Get the name of basic block indexed by `index`.
-    pub fn basic_block_name_by_index(&self, index: usize) -> &str {
-        self.bb_name_index_map.get_by_left(&index).unwrap()
+    fn basic_block_name_by_node(&self, index: Node) -> &str {
+        self.bb_name_node_map.get_by_left(&index).unwrap()
     }
 
-    /// Get all blocks that the control flow may pass from `from` to `to`.
-    pub fn may_pass_blocks(&self, from: usize, to: usize) -> Ref<Vec<usize>> {
+    fn may_pass_blocks(&self, from: Node, to: Node) -> Ref<Vec<Node>> {
         let mut from_to_passed_blocks = self.from_to_may_pass_blocks.borrow_mut();
         from_to_passed_blocks.entry((from, to)).or_insert_with(|| {
-            let mut passed_nodes =
-                algo::all_simple_paths::<Vec<_>, _>(&self.graph, from.into(), to.into(), 0, None)
-                    .flatten()
-                    .map(|it| it.index())
-                    .collect_vec();
+            let mut passed_nodes = algo::all_simple_paths::<Vec<_>, _>(
+                &self.graph,
+                from.0.into(),
+                to.0.into(),
+                0,
+                None,
+            )
+            .flatten()
+            .map(|it| Node(it.index()))
+            .collect_vec();
             passed_nodes.sort();
             passed_nodes.dedup();
             passed_nodes
@@ -143,40 +164,51 @@ impl ControlFlowGraphContent {
     }
 }
 
+/// [`ControlFlowGraph`] is for analyzing the control flow graph and related information of a function.
 #[derive(Default, Debug)]
-pub struct ControlFlowGraph(OnceCell<ControlFlowGraphContent>);
+pub struct ControlFlowGraph {
+    content: OnceCell<ControlFlowGraphContent>,
+    loop_item: OnceCell<Loop>,
+}
+
 impl ControlFlowGraph {
+    /// Creates a new [`ControlFlowGraph`].
     pub fn new() -> Self {
-        Self(OnceCell::new())
+        Self {
+            content: OnceCell::new(),
+            loop_item: OnceCell::new(),
+        }
     }
     fn content(&self, content: &FunctionDefinition) -> &ControlFlowGraphContent {
-        self.0.get_or_init(|| ControlFlowGraphContent::new(content))
+        self.content
+            .get_or_init(|| ControlFlowGraphContent::new(content))
     }
-    fn dominance_frontier(&self, content: &ir::FunctionDefinition, bb_index: usize) -> &[usize] {
-        self.content(content).dominance_frontier(bb_index)
+    fn dominance_frontier(&self, content: &ir::FunctionDefinition, node: Node) -> &[Node] {
+        self.content(content).dominance_frontier(node)
     }
-    fn basic_block_index_by_name(&self, content: &ir::FunctionDefinition, name: &str) -> usize {
-        self.content(content).basic_block_index_by_name(name)
+    fn basic_block_index_by_name(&self, content: &ir::FunctionDefinition, name: &str) -> Node {
+        self.content(content).node_by_basic_block_name(name)
     }
-    fn basic_block_name_by_index(&self, content: &ir::FunctionDefinition, index: usize) -> &str {
-        self.content(content).basic_block_name_by_index(index)
+    fn basic_block_name_by_index(&self, content: &ir::FunctionDefinition, index: Node) -> &str {
+        self.content(content).basic_block_name_by_node(index)
     }
     fn may_pass_blocks(
         &self,
         content: &ir::FunctionDefinition,
-        from: usize,
-        to: usize,
-    ) -> Ref<Vec<usize>> {
+        from: Node,
+        to: Node,
+    ) -> Ref<Vec<Node>> {
         self.content(content).may_pass_blocks(from, to)
     }
-    fn dominate(&self, content: &ir::FunctionDefinition, bb_index: usize) -> Vec<usize> {
-        self.content(content).dominates(bb_index)
+    fn dominate(&self, content: &ir::FunctionDefinition, node: Node) -> Vec<Node> {
+        self.content(content).dominates(node)
     }
-    // todo: cache it
-    fn loops(&self, content: &FunctionDefinition) -> Loop {
-        let graph = &self.content(content).graph;
-        let nodes: Vec<_> = graph.node_indices().collect();
-        Loop::new(graph, &nodes, &[])
+    fn loops(&self, content: &FunctionDefinition) -> &Loop {
+        self.loop_item.get_or_init(|| {
+            let graph = &self.content(content).graph;
+            let nodes: Vec<_> = graph.node_indices().collect();
+            Loop::new(graph, &nodes, &[])
+        })
     }
 }
 
@@ -186,47 +218,67 @@ pub struct BindedControlFlowGraph<'item, 'bind: 'item> {
 }
 
 impl<'item, 'bind: 'item> BindedControlFlowGraph<'item, 'bind> {
-    pub fn dominance_frontier(&self, bb_index: usize) -> &[usize] {
-        self.item.dominance_frontier(self.bind_on, bb_index)
+    /// [Dorminance Frontier](https://en.wikipedia.org/wiki/Dominator_(graph_theory)) of basic block indexed by `node`.
+    pub fn dominance_frontier(&self, node: Node) -> &[Node] {
+        self.item.dominance_frontier(self.bind_on, node)
     }
-    pub fn basic_block_index_by_name(&self, name: &str) -> usize {
+
+    /// Returns the [`Node`] of basic block named `name`.
+    pub fn node_by_basic_block_name(&self, name: &str) -> Node {
         self.item.basic_block_index_by_name(self.bind_on, name)
     }
-    pub fn basic_block_name_by_index(&self, index: usize) -> &str {
-        self.item.basic_block_name_by_index(self.bind_on, index)
+
+    /// Returns the name of basic block indexed by `node`.
+    pub fn basic_block_name_by_node(&self, node: Node) -> &str {
+        self.item.basic_block_name_by_index(self.bind_on, node)
     }
-    pub fn may_pass_blocks(&self, from: usize, to: usize) -> Ref<Vec<usize>> {
+
+    // Returns reference to the basic block indexed by `node`
+    pub fn basic_block_by_node(&self, node: Node) -> &ir::BasicBlock {
+        &self.bind_on.content[node.0]
+    }
+
+    /// Returns the basic blocks that may be passed from `from` to `to`.
+    pub fn may_pass_blocks(&self, from: Node, to: Node) -> Ref<Vec<Node>> {
         self.item.may_pass_blocks(self.bind_on, from, to)
     }
-    pub fn loops(&self) -> Loop {
+
+    /// Returns the [`Loop`] of the function.
+    pub fn loops(&self) -> &Loop {
         self.item.loops(self.bind_on)
     }
-    pub fn graph(&self) -> &DiGraph<(), (), usize> {
+
+    /// Returns the control flow graph.
+    fn graph(&self) -> &DiGraph<(), (), usize> {
         &self.item.content(self.bind_on).graph
     }
-    pub fn dominates(&self, bb_index: usize) -> Vec<usize> {
-        self.item.dominate(self.bind_on, bb_index)
-    }
-    pub fn predecessor(&self, bb_index: usize) -> Vec<usize> {
-        self.graph()
-            .neighbors_directed(bb_index.into(), Direction::Incoming)
-            .map(|it| it.index())
-            .collect()
+
+    /// Returns the [`Node`]s dominated by `node`.
+    pub fn dominates(&self, node: Node) -> Vec<Node> {
+        self.item.dominate(self.bind_on, node)
     }
 
-    pub fn successors(&self, bb_index: usize) -> Vec<usize> {
+    /// Returns the `node`'s predecessor, ie. the nodes which have edges into `node`.
+    pub fn predecessors(&self, node: Node) -> impl Iterator<Item = Node> + '_ {
         self.graph()
-            .neighbors_directed(bb_index.into(), Direction::Incoming)
-            .map(|it| it.index())
-            .collect()
+            .neighbors_directed(node.0.into(), Direction::Incoming)
+            .map(|it| Node(it.index()))
     }
 
-    pub fn not_dominate_successors(&self, bb_index: usize) -> Vec<usize> {
+    /// Returns the `node`'s successor, ie. the nodes which have edges from `node`.
+    pub fn successors(&self, node: Node) -> impl Iterator<Item = Node> + '_ {
+        self.graph()
+            .neighbors_directed(node.0.into(), Direction::Outgoing)
+            .map(|it| Node(it.index()))
+    }
+
+    /// Returns the `node`'s predecessor, but not dominated by `node`.
+    pub fn not_dominate_successors(&self, node: Node) -> Vec<Node> {
         let successors = self
             .graph()
-            .neighbors_directed(bb_index.into(), Direction::Incoming)
-            .map(|it| it.index());
-        let nodes_dominated = self.dominates(bb_index);
+            .neighbors_directed(node.0.into(), Direction::Incoming)
+            .map(|it| Node(it.index()));
+        let nodes_dominated = self.dominates(node);
         successors
             .filter(|it| !nodes_dominated.contains(it))
             .collect()
@@ -237,7 +289,8 @@ impl<'item, 'bind: 'item> IsAnalyzer<'item, 'bind> for ControlFlowGraph {
     type Binded = BindedControlFlowGraph<'item, 'bind>;
 
     fn on_action(&mut self, _action: &Action) {
-        self.0.take();
+        self.content.take();
+        self.loop_item.take();
     }
 
     fn bind(&'item self, content: &'bind ir::FunctionDefinition) -> Self::Binded {
@@ -323,7 +376,8 @@ mod tests {
                 },
             ],
         };
-        let loops = control_flow_graph.bind(&function_definition).loops();
+        let bind = control_flow_graph.bind(&function_definition);
+        let loops = bind.loops();
         assert!(loops.content.contains(&LoopContent::Node(0)));
         assert!(loops.content.contains(&LoopContent::Node(9)));
         assert!(loops

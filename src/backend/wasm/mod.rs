@@ -1,7 +1,7 @@
 use itertools::Itertools;
 
 use crate::ir::{
-    analyzer::{self, BindedControlFlowGraph, LoopContent},
+    analyzer::{self, BindedControlFlowGraph, LoopContent, Node},
     statement::IRStatement,
 };
 
@@ -10,7 +10,7 @@ pub enum ControlFlowContent {
     Block(Vec<ControlFlowContent>),
     If(Vec<ControlFlowContent>, Vec<ControlFlowContent>),
     Loop(Vec<ControlFlowContent>),
-    Node(usize),
+    Node(Node),
 }
 
 impl ControlFlowContent {
@@ -26,11 +26,11 @@ impl ControlFlowContent {
         Self::Loop(content)
     }
 
-    pub fn new_node(node: usize) -> Self {
+    pub fn new_node(node: Node) -> Self {
         Self::Node(node)
     }
 
-    pub fn first_node(&self) -> usize {
+    pub fn first_node(&self) -> Node {
         match self {
             ControlFlowContent::Block(content) | ControlFlowContent::Loop(content) => {
                 content.first().unwrap().first_node()
@@ -96,7 +96,7 @@ impl ControlFlowContent {
         }
     }
 
-    pub fn contains(&self, node: usize) -> bool {
+    pub fn contains(&self, node: Node) -> bool {
         match self {
             ControlFlowContent::Block(content) | ControlFlowContent::Loop(content) => {
                 content.iter().any(|it| it.contains(node))

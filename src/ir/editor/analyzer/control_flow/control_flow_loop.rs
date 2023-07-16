@@ -3,6 +3,8 @@ use petgraph::prelude::*;
 
 use crate::utility::graph::kosaraju_scc_with_filter;
 
+use super::BindedControlFlowGraph;
+
 #[derive(Debug, PartialEq)]
 pub enum LoopContent {
     SubLoop(Box<Loop>),
@@ -102,13 +104,14 @@ impl Loop {
 
     pub fn entry_info(
         &self,
-        graph: &DiGraph<(), (), usize>,
+        graph: &BindedControlFlowGraph,
     ) -> Vec<(NodeIndex<usize>, Vec<NodeIndex<usize>>)> {
         let mut result: Vec<_> = self
             .entries
             .iter()
             .map(|&entry| {
                 let mut from = graph
+                    .graph()
                     .edges_directed(entry.into(), Direction::Incoming)
                     .map(|it| it.source())
                     .collect_vec();

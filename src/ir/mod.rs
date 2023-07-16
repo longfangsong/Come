@@ -19,7 +19,7 @@ use crate::{
     ast::{ASTNode, Ast},
     utility::data_type::{self, Integer},
 };
-pub use function::{statement, FunctionDefinition, FunctionHeader};
+pub use function::{basic_block::BasicBlock, statement, FunctionDefinition, FunctionHeader};
 pub use global_definition::GlobalDefinition;
 use nom::{
     branch::alt, character::complete::multispace0, combinator::map, multi::many0,
