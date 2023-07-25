@@ -4,7 +4,7 @@ use itertools::Itertools;
 use petgraph::prelude::*;
 
 use crate::ir::{
-    analyzer::{BindedControlFlowGraph, IsAnalyzer, Loop},
+    analyzer::{BindedControlFlowGraph, IsAnalyzer, Node, Scc},
     optimize::pass::fix_irreducible::FixIrreducible,
 };
 
@@ -36,10 +36,10 @@ impl IsPass for TopologicalSort {
 
 fn topological_order_dfs(
     graph: &BindedControlFlowGraph,
-    top_level: &Loop,
-    current_at: NodeIndex<usize>,
-    visited: &mut Vec<NodeIndex<usize>>,
-    result: &mut Vec<NodeIndex<usize>>,
+    top_level: &Scc,
+    current_at: Node,
+    visited: &mut Vec<Node>,
+    result: &mut Vec<Node>,
 ) {
     if visited.contains(&current_at) {
         return;
@@ -87,12 +87,12 @@ fn topological_order_dfs(
     result.push(current_at);
 }
 
-pub fn topological_order(graph: &BindedControlFlowGraph, top_level: &Loop) -> Vec<usize> {
+pub fn topological_order(graph: &BindedControlFlowGraph, top_level: &Scc) -> Vec<usize> {
     let mut order = vec![];
     let mut visited = vec![];
     topological_order_dfs(graph, top_level, 0.into(), &mut visited, &mut order);
     order.reverse();
-    let mut order: Vec<usize> = order.into_iter().map(NodeIndex::index).collect();
+    let mut order: Vec<usize> = order.into_iter().map(Node::to_block_index).collect();
     let exit_block_position = order.iter().position_max().unwrap();
     order.remove(exit_block_position);
     order

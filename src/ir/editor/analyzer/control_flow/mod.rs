@@ -1,11 +1,11 @@
-mod control_flow_loop;
+mod scc;
 use super::IsAnalyzer;
 use crate::{
     ir::{self, editor::action::Action, statement::IRStatement, FunctionDefinition},
-    utility::{self},
+    utility::{self, graph},
 };
 use bimap::BiMap;
-pub use control_flow_loop::{Loop, LoopContent};
+use delegate::delegate;
 use itertools::Itertools;
 use petgraph::{
     algo::{
@@ -14,11 +14,12 @@ use petgraph::{
     },
     prelude::*,
 };
+pub use scc::{Scc, SccContent};
 use std::{
     cell::{OnceCell, Ref, RefCell},
     collections::HashMap,
+    hash::Hash,
 };
-
 /// A node in the control flow graph.
 /// For preventing using wrong index to access the graph,
 /// we introduced a new type here instead of using naive usize.
@@ -43,16 +44,19 @@ impl From<usize> for Node {
     }
 }
 
+/// An edge in the control flow graph.
+#[derive(Debug, Clone, Copy, Hash, PartialEq, Eq, PartialOrd, Ord)]
+pub struct Edge(Node, Node);
+
+/// This struct is the very basic part of control flow graph info that should be analyzed
+/// when constructing the graph from the function.
 #[derive(Debug)]
-struct ControlFlowGraphContent {
+struct ControlFlowGraphBasic {
     graph: DiGraph<(), (), usize>,
-    frontiers: HashMap<Node, Vec<Node>>,
     bb_name_node_map: BiMap<Node, String>,
-    dominators: Dominators<NodeIndex<usize>>,
-    from_to_may_pass_blocks: RefCell<HashMap<(Node, Node), Vec<Node>>>,
 }
 
-impl ControlFlowGraphContent {
+impl ControlFlowGraphBasic {
     fn new(function_definition: &FunctionDefinition) -> Self {
         let mut graph = DiGraph::<(), (), usize>::default();
         let bb_name_index_map: BiMap<_, _> = function_definition
@@ -83,53 +87,12 @@ impl ControlFlowGraphContent {
                 _ => unreachable!(),
             }
         }
-        let dorminators = simple_fast(&graph, 0.into());
         let graph = remove_unreachable_nodes(graph);
-        let frontiers = utility::graph::dominance_frontiers(&dorminators, &graph)
-            .into_iter()
-            .map(|(k, v)| {
-                (
-                    Node(k.index()),
-                    v.into_iter().map(NodeIndex::index).map(Node).collect(),
-                )
-            })
-            .collect();
         Self {
             graph,
-            frontiers,
-            dominators: dorminators,
             bb_name_node_map: bb_name_index_map,
             from_to_may_pass_blocks: RefCell::new(HashMap::new()),
         }
-    }
-
-    fn dominance_frontier(&self, node: Node) -> &[Node] {
-        self.frontiers.get(&node).unwrap()
-    }
-
-    fn dominates_calculate(&self, visiting: Node, visited: &mut Vec<Node>) {
-        if visited.contains(&visiting) {
-            return;
-        }
-        visited.push(visiting);
-        let mut imm_dominates = self.immediately_dominates(visiting);
-        imm_dominates.retain(|it| !visited.contains(it));
-        for it in imm_dominates {
-            self.dominates_calculate(it, visited);
-        }
-    }
-
-    fn immediately_dominates(&self, node: Node) -> Vec<Node> {
-        self.dominators
-            .immediately_dominated_by(node.0.into())
-            .map(|it| Node(it.index()))
-            .collect()
-    }
-
-    fn dominates(&self, node: Node) -> Vec<Node> {
-        let mut visited = Vec::new();
-        self.dominates_calculate(node, &mut visited);
-        visited
     }
 
     fn node_by_basic_block_name(&self, name: &str) -> Node {
@@ -139,12 +102,73 @@ impl ControlFlowGraphContent {
     fn basic_block_name_by_node(&self, index: Node) -> &str {
         self.bb_name_node_map.get_by_left(&index).unwrap()
     }
+}
 
-    fn may_pass_blocks(&self, from: Node, to: Node) -> Ref<Vec<Node>> {
+/// [`ControlFlowGraph`] is for analyzing the control flow graph and related information of a function.
+#[derive(Default, Debug)]
+pub struct ControlFlowGraph {
+    content: OnceCell<ControlFlowGraphBasic>,
+    frontiers: OnceCell<HashMap<Node, Vec<Node>>>,
+    dominators: OnceCell<Dominators<NodeIndex<usize>>>,
+    from_to_may_pass_blocks: RefCell<HashMap<(Node, Node), Vec<Node>>>,
+    scc_item: OnceCell<Scc>,
+}
+
+impl ControlFlowGraph {
+    /// Creates a new [`ControlFlowGraph`].
+    pub fn new() -> Self {
+        Self {
+            content: OnceCell::new(),
+            scc_item: OnceCell::new(),
+            frontiers: OnceCell::new(),
+            dominators: OnceCell::new(),
+            from_to_may_pass_blocks: RefCell::new(HashMap::new()),
+        }
+    }
+
+    fn content(&self, content: &FunctionDefinition) -> &ControlFlowGraphBasic {
+        self.content
+            .get_or_init(|| ControlFlowGraphBasic::new(content))
+    }
+
+    fn dominators(&self, content: &FunctionDefinition) -> &Dominators<NodeIndex<usize>> {
+        self.dominators
+            .get_or_init(|| simple_fast(&self.content(content).graph, 0.into()))
+    }
+
+    fn frontiers(&self, content: &FunctionDefinition) -> &HashMap<Node, Vec<Node>> {
+        self.frontiers.get_or_init(|| {
+            let graph = &self.content(content).graph;
+            let dominators = self.dominators(&content);
+            utility::graph::dominance_frontiers(dominators, graph)
+                .into_iter()
+                .map(|(k, v)| (k.index().into(), v.into_iter().map(Into::into).collect()))
+                .collect()
+        })
+    }
+
+    fn dominance_frontier(&self, content: &FunctionDefinition, node: Node) -> &[Node] {
+        self.frontiers(content).get(&node).unwrap()
+    }
+
+    delegate! {
+        to |content: &FunctionDefinition| self.content(content) {
+            fn node_by_basic_block_name(&self, name: &str) -> Node;
+            fn basic_block_name_by_node(&self, index: Node) -> &str;
+        }
+    }
+
+    /// Get all blocks that the control flow may pass from `from` to `to`.
+    pub fn may_pass_blocks(
+        &self,
+        content: &FunctionDefinition,
+        from: Node,
+        to: Node,
+    ) -> Ref<Vec<Node>> {
         let mut from_to_passed_blocks = self.from_to_may_pass_blocks.borrow_mut();
         from_to_passed_blocks.entry((from, to)).or_insert_with(|| {
             let mut passed_nodes = algo::all_simple_paths::<Vec<_>, _>(
-                &self.graph,
+                &self.content(content).graph,
                 from.0.into(),
                 to.0.into(),
                 0,
@@ -164,87 +188,34 @@ impl ControlFlowGraphContent {
     }
 }
 
-/// [`ControlFlowGraph`] is for analyzing the control flow graph and related information of a function.
-#[derive(Default, Debug)]
-pub struct ControlFlowGraph {
-    content: OnceCell<ControlFlowGraphContent>,
-    loop_item: OnceCell<Loop>,
-}
-
-impl ControlFlowGraph {
-    /// Creates a new [`ControlFlowGraph`].
-    pub fn new() -> Self {
-        Self {
-            content: OnceCell::new(),
-            loop_item: OnceCell::new(),
-        }
-    }
-    fn content(&self, content: &FunctionDefinition) -> &ControlFlowGraphContent {
-        self.content
-            .get_or_init(|| ControlFlowGraphContent::new(content))
-    }
-    fn dominance_frontier(&self, content: &ir::FunctionDefinition, node: Node) -> &[Node] {
-        self.content(content).dominance_frontier(node)
-    }
-    fn basic_block_index_by_name(&self, content: &ir::FunctionDefinition, name: &str) -> Node {
-        self.content(content).node_by_basic_block_name(name)
-    }
-    fn basic_block_name_by_index(&self, content: &ir::FunctionDefinition, index: Node) -> &str {
-        self.content(content).basic_block_name_by_node(index)
-    }
-    fn may_pass_blocks(
-        &self,
-        content: &ir::FunctionDefinition,
-        from: Node,
-        to: Node,
-    ) -> Ref<Vec<Node>> {
-        self.content(content).may_pass_blocks(from, to)
-    }
-    fn dominate(&self, content: &ir::FunctionDefinition, node: Node) -> Vec<Node> {
-        self.content(content).dominates(node)
-    }
-    fn loops(&self, content: &FunctionDefinition) -> &Loop {
-        self.loop_item.get_or_init(|| {
-            let graph = &self.content(content).graph;
-            let nodes: Vec<_> = graph.node_indices().collect();
-            Loop::new(graph, &nodes, &[])
-        })
-    }
-}
-
 pub struct BindedControlFlowGraph<'item, 'bind: 'item> {
     pub bind_on: &'bind FunctionDefinition,
     item: &'item ControlFlowGraph,
 }
 
 impl<'item, 'bind: 'item> BindedControlFlowGraph<'item, 'bind> {
-    /// [Dorminance Frontier](https://en.wikipedia.org/wiki/Dominator_(graph_theory)) of basic block indexed by `node`.
-    pub fn dominance_frontier(&self, node: Node) -> &[Node] {
-        self.item.dominance_frontier(self.bind_on, node)
-    }
+    delegate! {
+        to self.item {
+            /// [Dorminance Frontier](https://en.wikipedia.org/wiki/Dominator_(graph_theory)) of basic block indexed by `node`.
+            pub fn dominance_frontier(&self, [ self.bind_on ], node: Node) -> &[Node];
 
-    /// Returns the [`Node`] of basic block named `name`.
-    pub fn node_by_basic_block_name(&self, name: &str) -> Node {
-        self.item.basic_block_index_by_name(self.bind_on, name)
-    }
+            /// Returns the [`Node`] of basic block named `name`.
+            pub fn node_by_basic_block_name(&self, [ self.bind_on ], name: &str) -> Node;
 
-    /// Returns the name of basic block indexed by `node`.
-    pub fn basic_block_name_by_node(&self, node: Node) -> &str {
-        self.item.basic_block_name_by_index(self.bind_on, node)
+            /// Returns the name of basic block indexed by `node`.
+            pub fn basic_block_name_by_node(&self, [ self.bind_on ], node: Node) -> &str;
+        }
     }
 
     // Returns reference to the basic block indexed by `node`
-    pub fn basic_block_by_node(&self, node: Node) -> &ir::BasicBlock {
-        &self.bind_on.content[node.0]
-    }
-
+    // pub fn basic_block_by_node(&self, name: &str) -> &ir::BasicBlock {}
     /// Returns the basic blocks that may be passed from `from` to `to`.
     pub fn may_pass_blocks(&self, from: Node, to: Node) -> Ref<Vec<Node>> {
         self.item.may_pass_blocks(self.bind_on, from, to)
     }
 
     /// Returns the [`Loop`] of the function.
-    pub fn loops(&self) -> &Loop {
+    pub fn loops(&self) -> &Scc {
         self.item.loops(self.bind_on)
     }
 
@@ -290,7 +261,7 @@ impl<'item, 'bind: 'item> IsAnalyzer<'item, 'bind> for ControlFlowGraph {
 
     fn on_action(&mut self, _action: &Action) {
         self.content.take();
-        self.loop_item.take();
+        self.scc_item.take();
     }
 
     fn bind(&'item self, content: &'bind ir::FunctionDefinition) -> Self::Binded {
@@ -378,12 +349,12 @@ mod tests {
         };
         let bind = control_flow_graph.bind(&function_definition);
         let loops = bind.loops();
-        assert!(loops.content.contains(&LoopContent::Node(0)));
-        assert!(loops.content.contains(&LoopContent::Node(9)));
+        assert!(loops.content.contains(&SccContent::Node(0.into())));
+        assert!(loops.content.contains(&SccContent::Node(9.into())));
         assert!(loops
             .content
             .iter()
-            .any(|it| if let LoopContent::SubLoop(subloop) = it {
+            .any(|it| if let SccContent::SubLoop(subloop) = it {
                 subloop.entries.contains(&1)
             } else {
                 false
@@ -391,7 +362,7 @@ mod tests {
         assert!(loops
             .content
             .iter()
-            .any(|it| if let LoopContent::SubLoop(subloop) = it {
+            .any(|it| if let SccContent::SubLoop(subloop) = it {
                 subloop.entries.contains(&2)
             } else {
                 false

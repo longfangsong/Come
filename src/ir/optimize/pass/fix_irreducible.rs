@@ -31,9 +31,9 @@ struct ShouldGoTo {
 
 fn fold_entries_once(
     loop_name: &str,
-    header: &mut Option<NodeIndex<usize>>,
-    generated: &mut Vec<NodeIndex<usize>>,
-    entries: &mut Vec<(NodeIndex<usize>, Vec<NodeIndex<usize>>)>,
+    header: &mut Option<Node>,
+    generated: &mut Vec<Node>,
+    entries: &mut Vec<(Node, Vec<Node>)>,
     editor: &mut crate::ir::editor::Editor,
 ) -> Vec<ShouldGoTo> {
     let last = generated.last();
@@ -45,18 +45,24 @@ fn fold_entries_once(
         );
         let new_node = editor.create_basic_block(new_node_name.clone());
         if let Some(last) = last {
-            let last_bb_size = editor.content[last.index()].content.len();
-            let mut last_bb_last_statement =
-                editor.content[last.index()].content.last().unwrap().clone();
-            editor.remove_statement((last.index(), last_bb_size - 1));
+            let last_bb_size = editor.content[last.to_block_index()].content.len();
+            let mut last_bb_last_statement = editor.content[last.to_block_index()]
+                .content
+                .last()
+                .unwrap()
+                .clone();
+            editor.remove_statement((last.to_block_index(), last_bb_size - 1));
             let IRStatement::Branch(branch) = &mut last_bb_last_statement else {
                 unreachable!()
             };
             branch.failure_label = new_node_name.clone();
-            editor.push_back_statement(last.index(), last_bb_last_statement);
+            editor.push_back_statement(last.to_block_index(), last_bb_last_statement);
         }
         let (branch_to, blocks_into_branch_to) = entries.pop().unwrap();
-        let branch_to_bb_name = editor.content[branch_to.index()].name.clone().unwrap();
+        let branch_to_bb_name = editor.content[branch_to.to_block_index()]
+            .name
+            .clone()
+            .unwrap();
         let operand_name = format!("{new_node_name}_var");
         let new_branch_statement = Branch {
             branch_type: BranchType::NE,
@@ -71,32 +77,38 @@ fn fold_entries_once(
         fix_branch_into_source(
             loop_name,
             editor,
-            header.index(),
-            branch_to.index(),
+            header.to_block_index(),
+            branch_to.to_block_index(),
             &blocks_into_branch_to,
             new_node,
         )
     } else {
         let last = last.unwrap();
-        let last_bb_size = editor.content[last.index()].content.len();
-        let mut last_bb_last_statement =
-            editor.content[last.index()].content.last().unwrap().clone();
-        editor.remove_statement((last.index(), last_bb_size - 1));
+        let last_bb_size = editor.content[last.to_block_index()].content.len();
+        let mut last_bb_last_statement = editor.content[last.to_block_index()]
+            .content
+            .last()
+            .unwrap()
+            .clone();
+        editor.remove_statement((last.to_block_index(), last_bb_size - 1));
         let IRStatement::Branch(branch) = &mut last_bb_last_statement else {
             unreachable!()
         };
         let (branch_to, blocks_into_branch_to) = entries.pop().unwrap();
-        let branch_to_bb_name = editor.content[branch_to.index()].name.clone().unwrap();
+        let branch_to_bb_name = editor.content[branch_to.to_block_index()]
+            .name
+            .clone()
+            .unwrap();
         branch.failure_label = branch_to_bb_name;
-        editor.push_back_statement(last.index(), last_bb_last_statement);
+        editor.push_back_statement(last.to_block_index(), last_bb_last_statement);
         let header = header.as_mut().unwrap();
         let mut result = fix_branch_into_source(
             loop_name,
             editor,
-            header.index(),
-            branch_to.index(),
+            header.to_block_index(),
+            branch_to.to_block_index(),
             &blocks_into_branch_to,
-            last.index(),
+            last.to_block_index(),
         );
         for r in result.iter_mut() {
             r.on_success_branch = false;
@@ -110,7 +122,7 @@ fn fix_branch_into_source(
     editor: &mut crate::ir::editor::Editor,
     header: usize,
     branch_to: usize,
-    from_blocks: &[NodeIndex<usize>],
+    from_blocks: &[Node],
     dispatcher: usize,
 ) -> Vec<ShouldGoTo> {
     let header_block_name = format!("{loop_name}_dispatcher_at_{header}");
@@ -231,7 +243,7 @@ fn fix_branch_into_source(
 fn generate_phis(
     loop_name: &str,
     all_should_go_to: &[ShouldGoTo],
-    generated: &[NodeIndex<usize>],
+    generated: &[Node],
     editor: &mut crate::ir::editor::Editor,
 ) -> Vec<Phi> {
     let sources = all_should_go_to.iter().map(|it| it.from).collect_vec();
@@ -241,14 +253,14 @@ fn generate_phis(
         .sorted_by_cached_key(|(it, _)| {
             generated
                 .iter()
-                .position(|generated_index| generated_index.index() == *it)
+                .position(|generated_index| generated_index.to_block_index() == *it)
         })
         .collect_vec();
     generated
         .iter()
         .zip(groups.into_iter())
         .map(|(generated, (_, should_gotos))| {
-            let generated = generated.index();
+            let generated = generated.to_block_index();
             let should_go_to = should_gotos
                 .into_iter()
                 .filter(|it| it.on_success_branch)
@@ -324,7 +336,7 @@ impl IsPass for FixIrreducible {
                 ));
             }
             let phis = generate_phis(&loop_name, &should_go_to, &generated, editor);
-            let header = header.unwrap().index();
+            let header = header.unwrap().to_block_index();
             for phi in phis.into_iter() {
                 editor.push_front_statement(header, phi);
             }

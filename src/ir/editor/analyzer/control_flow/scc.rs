@@ -3,30 +3,30 @@ use petgraph::prelude::*;
 
 use crate::utility::graph::kosaraju_scc_with_filter;
 
-use super::BindedControlFlowGraph;
+use super::{BindedControlFlowGraph, Node};
 
 #[derive(Debug, PartialEq)]
-pub enum LoopContent {
-    SubLoop(Box<Loop>),
-    Node(usize),
+pub enum SccContent {
+    SubLoop(Box<Scc>),
+    Node(Node),
 }
 
-impl LoopContent {
-    pub fn is_node_in(&self, node: NodeIndex<usize>) -> bool {
+impl SccContent {
+    pub fn is_node_in(&self, node: Node) -> bool {
         match self {
-            LoopContent::SubLoop(it) => it.is_node_in(node),
-            LoopContent::Node(it) => node.index() == *it,
+            SccContent::SubLoop(it) => it.is_node_in(node),
+            SccContent::Node(it) => node == *it,
         }
     }
 }
 
 #[derive(Debug, PartialEq)]
-pub struct Loop {
+pub struct Scc {
     pub entries: Vec<usize>,
-    pub content: Vec<LoopContent>,
+    pub content: Vec<SccContent>,
 }
 
-impl Loop {
+impl Scc {
     pub fn new(
         graph: &DiGraph<(), (), usize>,
         nodes: &[NodeIndex<usize>],
@@ -62,7 +62,7 @@ impl Loop {
                 entries: entries.into_iter().map(|it| it.index()).collect(),
                 content: sccs[0]
                     .iter()
-                    .map(|it| LoopContent::Node(it.index()))
+                    .map(|it| SccContent::Node(it.index().into()))
                     .collect(),
             };
         }
@@ -70,16 +70,16 @@ impl Loop {
             .into_iter()
             .map(|mut scc| {
                 if scc.len() == 1 {
-                    LoopContent::Node(scc.pop().unwrap().index())
+                    SccContent::Node(scc.pop().unwrap().index().into())
                 } else {
-                    let sub_loop = Loop::new(graph, &scc, &new_backedges);
-                    LoopContent::SubLoop(Box::new(sub_loop))
+                    let sub_loop = Scc::new(graph, &scc, &new_backedges);
+                    SccContent::SubLoop(Box::new(sub_loop))
                 }
             })
             .collect();
         for entry in &entries {
-            if !content.iter().any(|it| it.is_node_in(*entry)) {
-                content.push(LoopContent::Node(entry.index()));
+            if !content.iter().any(|it| it.is_node_in(entry.index().into())) {
+                content.push(SccContent::Node(entry.index().into()));
             }
         }
         Self {
@@ -88,24 +88,21 @@ impl Loop {
         }
     }
 
-    pub fn first_irreducible_loop(&self) -> Option<&Loop> {
+    pub fn first_irreducible_loop(&self) -> Option<&Scc> {
         if self.entries.len() > 1 {
             Some(self)
         } else {
             self.content
                 .iter()
                 .filter_map(|it| match it {
-                    LoopContent::SubLoop(sub_loop) => Some(sub_loop),
-                    LoopContent::Node(_) => None,
+                    SccContent::SubLoop(sub_loop) => Some(sub_loop),
+                    SccContent::Node(_) => None,
                 })
                 .find_map(|it| it.first_irreducible_loop())
         }
     }
 
-    pub fn entry_info(
-        &self,
-        graph: &BindedControlFlowGraph,
-    ) -> Vec<(NodeIndex<usize>, Vec<NodeIndex<usize>>)> {
+    pub fn entry_info(&self, graph: &BindedControlFlowGraph) -> Vec<(Node, Vec<Node>)> {
         let mut result: Vec<_> = self
             .entries
             .iter()
@@ -113,7 +110,7 @@ impl Loop {
                 let mut from = graph
                     .graph()
                     .edges_directed(entry.into(), Direction::Incoming)
-                    .map(|it| it.source())
+                    .map(|it| it.source().into())
                     .collect_vec();
                 from.sort_unstable();
                 (entry.into(), from)
@@ -130,34 +127,34 @@ impl Loop {
         )
     }
 
-    pub fn smallest_loop_node_in(&self, node: NodeIndex<usize>) -> Option<&Loop> {
+    pub fn smallest_loop_node_in(&self, node: Node) -> Option<&Scc> {
         let found_node = self
             .content
             .iter()
             .filter_map(|it| {
-                if let LoopContent::Node(node) = it {
+                if let SccContent::Node(node) = it {
                     Some(*node)
                 } else {
                     None
                 }
             })
-            .find(|&it| it == node.index());
+            .find(|&it| it == node);
         if found_node.is_some() {
             return Some(self);
         }
         self.content
             .iter()
             .filter_map(|it| match it {
-                LoopContent::SubLoop(sub_loop) => Some(sub_loop),
-                LoopContent::Node(_) => None,
+                SccContent::SubLoop(sub_loop) => Some(sub_loop),
+                SccContent::Node(_) => None,
             })
             .find_map(|it| it.smallest_loop_node_in(node))
     }
 
-    pub fn is_node_in(&self, node: NodeIndex<usize>) -> bool {
+    pub fn is_node_in(&self, node: Node) -> bool {
         self.content.iter().any(|it| match it {
-            LoopContent::SubLoop(sub_loop) => sub_loop.is_node_in(node),
-            LoopContent::Node(n) => node.index() == *n,
+            SccContent::SubLoop(sub_loop) => sub_loop.is_node_in(node),
+            SccContent::Node(n) => node == *n,
         })
     }
 
@@ -165,8 +162,8 @@ impl Loop {
         self.content
             .iter()
             .map(|it| match it {
-                LoopContent::SubLoop(sub_loop) => sub_loop.node_count(),
-                LoopContent::Node(_) => 1,
+                SccContent::SubLoop(sub_loop) => sub_loop.node_count(),
+                SccContent::Node(_) => 1,
             })
             .sum()
     }
@@ -199,7 +196,7 @@ mod tests {
         graph.add_edge(node_5, node_4, ());
         graph.add_edge(node_3, node_7, ());
         graph.add_edge(node_4, node_7, ());
-        let result = Loop::new(
+        let result = Scc::new(
             &graph,
             &[
                 node_0, node_1, node_2, node_3, node_4, node_5, node_6, node_7,
@@ -211,8 +208,8 @@ mod tests {
             .content
             .iter()
             .find_map(|it| match it {
-                LoopContent::SubLoop(sub_loop) => Some(sub_loop),
-                LoopContent::Node(_) => None,
+                SccContent::SubLoop(sub_loop) => Some(sub_loop),
+                SccContent::Node(_) => None,
             })
             .unwrap()
             .as_ref();

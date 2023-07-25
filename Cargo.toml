@@ -22,6 +22,7 @@ serde = { version = "1.0.162", features = ["derive"] }
 toml = "0.7.3"
 shadow-rs = { version = "0.21.0", optional = true }
 ezio = { version = "0.1.2", optional = true }
+delegate = { git = "https://github.com/longfangsong/rust-delegate" }
 
 [dev-dependencies]
 cov-mark = "1.1.0"

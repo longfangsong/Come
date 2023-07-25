@@ -106,6 +106,7 @@ pub fn assign_register(
         // todo: can be register usage count
         active_block_intersection(group, &variables_active_blocks).len()
     });
+    // 0 and 1 are reserved for temporary use
     let mut next_temporary_register_id = 2;
     for group in register_groups {
         let sample_register = group.iter().next().unwrap();

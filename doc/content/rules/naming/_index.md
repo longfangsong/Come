@@ -24,3 +24,4 @@ Here is the glossary:
 |     asm      | ASseMbly language       |   (All)        |
 |    ir        | Intermediate Representation       |     (All)      |
 |    bb        | Basic Block       |     `come::ir`      |
+|   scc        | Strongly Connected Component |     `come::ir::editor::analyzer::control_flow`      |
